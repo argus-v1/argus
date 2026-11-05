@@ -29,3 +29,6 @@ demo/
 
 # Switch Console writes agent credentials here
 .switch/
+
+# GitHub App private key and other local secrets
+.secrets/
