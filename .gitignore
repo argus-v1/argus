@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Agent clones of the demo repo (T7) and run output
+agents/*/repo/
+shared/evidence/*
+!shared/evidence/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node / Next.js (website, later)
+node_modules/
+.next/
+.vercel/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Demo library (its own repo, published to the argus-demo org)
+demo/
