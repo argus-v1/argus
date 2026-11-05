@@ -32,3 +32,6 @@ demo/
 
 # GitHub App private key and other local secrets
 .secrets/
+
+# Orchestrator runtime logs
+orchestrator/logs/
