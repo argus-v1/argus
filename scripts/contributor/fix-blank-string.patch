@@ -1,0 +1,47 @@
+From db427663fc9d7fc9fa7efcce51aa4b3e68dce562 Mon Sep 17 00:00:00 2001
+From: Dev 2 <dev2@example.invalid>
+Date: Thu, 5 Nov 2026 16:28:32 +0530
+Subject: [PATCH] Treat whitespace-only input as empty too
+
+---
+ src/datewise/parser.py | 6 +++---
+ tests/test_parser.py   | 6 ++++++
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/src/datewise/parser.py b/src/datewise/parser.py
+index ca11dd1..63856ba 100644
+--- a/src/datewise/parser.py
++++ b/src/datewise/parser.py
+@@ -42,12 +42,12 @@ def parse_date(text: str, *, today: date | None = None) -> date:
+     if not isinstance(text, str):
+         raise TypeError(f"parse_date() expects a str, got {type(text).__name__}")
+ 
+-    if text == "":
+-        raise DateParseError("empty date string")
+-
+     today = today or date.today()
+     cleaned = text.strip().lower()
+ 
++    if not cleaned:
++        raise DateParseError("empty date string")
++
+     if cleaned[0] in "+-":
+         return _parse_relative(cleaned, today, text)
+ 
+diff --git a/tests/test_parser.py b/tests/test_parser.py
+index 3cb3f6b..200b0f6 100644
+--- a/tests/test_parser.py
++++ b/tests/test_parser.py
+@@ -82,3 +82,9 @@ def test_non_string_raises_type_error():
+ 
+ def test_parse_error_is_a_value_error():
+     assert issubclass(DateParseError, ValueError)
++
++
++@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
++def test_blank_input_raises_parse_error(blank):
++    with pytest.raises(DateParseError, match="empty date string"):
++        parse_date(blank)
+-- 
+2.53.0
+
