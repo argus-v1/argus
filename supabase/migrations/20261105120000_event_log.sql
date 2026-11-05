@@ -20,7 +20,7 @@ create table public.investigations (
                     check (stage in ('scoping', 'reproducing', 'challenging', 'reporting', 'verdict')),
   status            text not null default 'running'
                     check (status in ('running', 'done', 'error')),
-  verdict           text check (verdict in ('verified', 'changes_needed')),
+  verdict           text check (verdict in ('verified', 'changes-needed', 'not-reproduced', 'needs-human')),
   reproducer_model  text,                       -- denormalised for the evals model-pair matrix
   skeptic_model     text,
   comment_url       text,                       -- the Scribe comment on GitHub

@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Agent-facing front end to the Argus sandbox (sandbox/run_tests.py).
+
+    ~/argus/bin/run_tests --repo ./repo --ref <main|pr-N|sha> \
+        --test "<pytest node id or path>" --out ~/argus/shared/evidence/pr-N --label <name>
+
+--ref   A branch name resolves to the freshly fetched origin/<name> when that
+        exists (so "main" is upstream main), otherwise to the local branch
+        (e.g. pr-N from `git fetch origin pull/N/head:pr-N`), or a sha.
+--test  Where the test file is looked up, in order:
+          1. in the commit itself (the repo's own tests, or a directory like tests/)
+          2. in the clone's working tree (a test you copied into repo/tests/)
+          3. as a host path, e.g. a file in the evidence folder; it is copied
+             into tests/ under its own name
+        Repeat --test to run several. Omit it to run the whole suite.
+
+Writes <label>.json ({ref, sha, test, outcome: passed|failed|error, exit_code,
+duration_s, summary, ...}) and <label>.log to --out. Exit code is pytest's.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SANDBOX = ROOT / "sandbox" / "run_tests.py"
+EVIDENCE = ROOT / "shared" / "evidence"
+
+
+def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=check)
+
+
+def resolve_ref(repo: Path, ref: str) -> str:
+    for candidate in (f"refs/remotes/origin/{ref}", ref):
+        r = git(repo, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}", check=False)
+        if r.returncode == 0:
+            return r.stdout.strip()
+    sys.exit(f"run_tests: unknown ref {ref!r} in {repo} "
+             f"(for a PR, run: git -C {repo} fetch origin pull/N/head:pr-N)")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--repo", required=True, type=Path)
+    ap.add_argument("--ref", required=True)
+    ap.add_argument("--test", action="append", default=[])
+    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--label", required=True)
+    ap.add_argument("--timeout", default="120")
+    args = ap.parse_args()
+
+    repo = args.repo.expanduser().resolve()
+    out = args.out.expanduser()
+    sha = resolve_ref(repo, args.ref)
+
+    select: list[str] = []
+    puts: list[str] = []
+    for spec in args.test:
+        path, sep, node = spec.partition("::")
+        clean = path.rstrip("/")
+        in_tree = (repo / clean).resolve()
+        relative = not Path(clean).is_absolute() and not clean.startswith("~") \
+            and in_tree.is_relative_to(repo)
+        if relative and git(repo, "cat-file", "-e", f"{sha}:{clean}", check=False).returncode == 0:
+            select.append(spec)                                    # 1. in the commit
+        elif relative and in_tree.is_file():
+            puts += ["--put", f"{in_tree}:{clean}"]                # 2. working tree
+            select.append(spec)
+        elif Path(clean).expanduser().is_file():
+            host = Path(clean).expanduser().resolve()              # 3. host file
+            # Only test files from the evidence folder may enter the sandbox:
+            # anything else (.env, keys) could be printed into a public log.
+            if host.suffix != ".py" or not host.is_relative_to(EVIDENCE):
+                sys.exit(f"run_tests: refusing {path!r}: files from outside the repo must be "
+                         f".py files in {EVIDENCE}")
+            dest = f"tests/{host.name}"
+            puts += ["--put", f"{host}:{dest}"]
+            select.append(dest + sep + node)
+        else:
+            sys.exit(f"run_tests: test {path!r} not found in {args.ref} ({sha[:7]}), "
+                     f"in {repo}, or on disk")
+
+    cmd = [str(SANDBOX), "--repo", str(repo), "--ref", sha, "--out", str(out),
+           "--label", args.label, "--timeout", args.timeout, *puts, "--", *select]
+    code = subprocess.run(cmd).returncode
+
+    # Report the ref the agent asked for (main, pr-N), not the resolved sha.
+    result = out / f"{args.label}.json"
+    if result.exists():
+        record = json.loads(result.read_text())
+        record["ref"] = args.ref
+        result.write_text(json.dumps(record, indent=2) + "\n")
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

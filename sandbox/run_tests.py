@@ -42,6 +42,8 @@ def main() -> int:
     ap.add_argument("--ref", required=True, help="branch, tag or sha to test")
     ap.add_argument("--add-test", action="append", default=[], type=Path,
                     help="test file to copy into tests/ before running (repeatable)")
+    ap.add_argument("--put", action="append", default=[], metavar="SRC:DEST",
+                    help="copy host file SRC to repo-relative DEST before running (repeatable)")
     ap.add_argument("--out", required=True, type=Path, help="evidence folder for the JSON and log")
     ap.add_argument("--label", required=True, help="name for this run, e.g. repro-main")
     ap.add_argument("--timeout", type=int, default=120, help="seconds before the run is killed")
@@ -71,12 +73,20 @@ def main() -> int:
                                  check=True, capture_output=True).stdout
         subprocess.run(["tar", "-x", "-C", str(work)], input=archive, check=True)
 
-        tests_dir = work / "tests"
-        for test in args.add_test:
-            if not test.is_file():
-                ap.error(f"--add-test {test} is not a file")
-            tests_dir.mkdir(exist_ok=True)
-            shutil.copy2(test, tests_dir / test.name)
+        puts = [(test, f"tests/{test.name}") for test in args.add_test]
+        for spec in args.put:
+            src, sep, dest = spec.rpartition(":")
+            if not sep or not src or not dest:
+                ap.error(f"--put {spec!r}: expected SRC:DEST")
+            puts.append((Path(src), dest))
+        for src, dest in puts:
+            if not src.is_file():
+                ap.error(f"{src} is not a file")
+            target = (work / dest).resolve()
+            if dest.startswith("/") or ".." in Path(dest).parts or not target.is_relative_to(work.resolve()):
+                ap.error(f"refusing destination {dest!r}: must stay inside the repo")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target)
 
         # The container runs as uid 65534; it reads work/ and writes only results/.
         os.chmod(work, 0o755)
@@ -110,20 +120,33 @@ def main() -> int:
 
         counts, cases = parse_junit(results / "junit.xml")
 
-    outcome = {0: "passed", 1: "failed", 124: "timeout"}.get(exit_code, "error")
-    command = "pytest " + " ".join(args.select) if args.select else "pytest"
+    # outcome is passed | failed | error; a timeout is an error with timed_out set.
+    outcome = {0: "passed", 1: "failed"}.get(exit_code, "error")
+    test = " ".join(args.select) if args.select else "tests/"
+    command = f"pytest {test}" if args.select else "pytest"
+    summary = ", ".join(f"{v} {k}" for k, v in counts.items() if v) or "no tests ran"
+    if exit_code == 124:
+        summary = f"timed out after {args.timeout}s"
+    else:
+        first_failure = next((c for c in cases if c["outcome"] in ("failed", "error") and c["message"]), None)
+        if first_failure:
+            summary += f" · {first_failure['message'].splitlines()[0][:200]}"
     log_path = args.out / f"{args.label}.log"
     log_path.write_text(log)
     record = {
         "label": args.label,
         "ref": args.ref,
         "sha": sha,
+        "test": test,
         "command": command,
-        "added_tests": [t.name for t in args.add_test],
+        "added_files": [dest for _, dest in puts],
         "outcome": outcome,
         "exit_code": exit_code,
+        "timed_out": exit_code == 124,
+        "summary": summary,
         "counts": counts,
         "cases": cases,
+        "duration_s": round(duration_ms / 1000, 1),
         "duration_ms": duration_ms,
         "started_at": started.isoformat(timespec="seconds"),
         "log": log_path.name,
@@ -133,7 +156,6 @@ def main() -> int:
     (args.out / f"{args.label}.json").write_text(json.dumps(record, indent=2) + "\n")
 
     mark = "✔" if outcome == "passed" else "✘"
-    summary = ", ".join(f"{v} {k}" for k, v in counts.items() if v) or "no tests ran"
     print(f"{mark} {args.label}: {command} @ {args.ref} ({sha[:7]}) -> {outcome.upper()} "
           f"[{summary}] {duration_ms / 1000:.1f}s")
     return exit_code

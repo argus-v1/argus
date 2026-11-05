@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(~/argus/shared/evidence/**)",
+      "Edit(~/argus/shared/evidence/**)",
+      "Write(~/argus/shared/evidence/**)",
+      "Read(/home/ayush/Desktop/Argus/shared/evidence/**)",
+      "Edit(/home/ayush/Desktop/Argus/shared/evidence/**)",
+      "Write(/home/ayush/Desktop/Argus/shared/evidence/**)",
+      "Bash(ls ~/argus/shared/evidence/*)",
+      "Bash(date *)",
+      "Bash(git -C repo fetch origin *)",
+      "Bash(git -C repo checkout *)",
+      "Bash(git -C repo diff *)",
+      "Bash(git -C repo log *)",
+      "Bash(git -C repo show *)",
+      "Bash(git -C repo rev-parse *)",
+      "Bash(git -C repo status *)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git -C repo push *)",
+      "Bash(pytest *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip *)",
+      "Bash(pip3 *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(gh *)",
+      "Bash(docker *)",
+      "Read(~/argus/.env)",
+      "Read(/home/ayush/Desktop/Argus/.env)",
+      "Read(**/*.pem)",
+      "Edit(repo/src/**)",
+      "Write(repo/src/**)"
+    ],
+    "additionalDirectories": [
+      "~/argus/shared/evidence",
+      "/home/ayush/Desktop/Argus/shared/evidence"
+    ]
+  }
+}
