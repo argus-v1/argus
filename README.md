@@ -23,4 +23,4 @@ Argus/
 └── scripts/              reset and timing scripts for rehearsals
 ```
 
-The demo library (T4) is its own repository under the `argus-demo` org, not part of this tree.
+The demo library (T4) lives in `demo/datewise`, its own repository published as [argus-v1/datewise](https://github.com/argus-v1/datewise), and is ignored by this one.
