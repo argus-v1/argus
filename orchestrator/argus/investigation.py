@@ -302,8 +302,11 @@ class Investigation:
             for m in msgs:
                 author = (m.get("author") or {}).get("username", "").lower()
                 text = m.get("content") or ""
-                if author.startswith(stage.role) and "via Argus" not in author \
-                        and ("STATUS:" in text or f"PR #{self.n}" in text):
+                if not author.startswith(stage.role) or "via argus" in author:
+                    continue
+                if _posted_at(m) < started - 2:     # an earlier stage or attempt
+                    continue
+                if "STATUS:" in text or f"PR #{self.n}" in text:
                     return True
             return False
 
@@ -369,6 +372,15 @@ def fill_links(body: str, site_url: str, repo: str, n: int, attempt: int) -> str
 
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def _posted_at(message: dict) -> float:
+    """Discord message timestamp as epoch seconds (0 if missing)."""
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(message["timestamp"]).timestamp()
+    except (KeyError, ValueError):
+        return 0.0
 
 
 class Orchestrator:

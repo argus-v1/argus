@@ -168,9 +168,15 @@ class InvestigationTests(unittest.TestCase):
                     self.write("scope.json", {"claim": "c", "room_message": "🧭 TRIAGER · PR #2 · scoping\nclaim\nSTATUS: done"})
 
             def recent(self, thread=None, limit=20):
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc).isoformat()
+                old = "2026-01-01T00:00:00+00:00"
+                earlier = [{"author": {"username": "triager (via Argus)"}, "content": "🧭 TRIAGER · PR #2", "timestamp": now},
+                           {"author": {"username": "triager"}, "content": "🧭 TRIAGER · PR #2\nSTATUS: done", "timestamp": old}]
                 if self.agent_posts:
-                    return [{"author": {"username": "triager"}, "content": "🧭 TRIAGER · PR #2 · scoping\nSTATUS: done"}]
-                return []
+                    return [{"author": {"username": "triager"}, "content": "🧭 TRIAGER · PR #2 · scoping\nSTATUS: done",
+                             "timestamp": now}] + earlier
+                return earlier                                 # a relay and an old attempt don't count
 
             def post_as(self, name, text, thread=None):
                 self.relayed = (name, text)
