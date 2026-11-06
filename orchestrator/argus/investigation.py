@@ -173,6 +173,11 @@ class Investigation:
         log = self.dir / str(run.get("log") or "")
         if run.get("log") and log.is_file():
             extras["log_tail"] = clean("\n".join(log.read_text(errors="replace").splitlines()[-20:]))
+        # Per-test results, so the site's fix-it brief can name each failing input and its error.
+        cases = [{"id": c.get("id"), "outcome": c.get("outcome"), "message": clean(str(c.get("message") or ""))[:300]}
+                 for c in (run.get("cases") or [])[:40] if isinstance(c, dict)]
+        if cases:
+            extras["cases"] = cases
         return extras
 
     # -- setup -----------------------------------------------------------------
