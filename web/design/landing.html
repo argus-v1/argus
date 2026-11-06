@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Argus · Make them prove it</title>
+<meta name="description" content="Argus verifies the claim in a pull request with real tests before a maintainer spends an hour on it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Spectral:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0b;
+  --surface: #141412;
+  --surface-2: #1b1b18;
+  --surface-3: #25241f;
+  --line: rgb(255 250 235 / 0.08);
+  --line-strong: rgb(255 250 235 / 0.16);
+  --text: #ece8dd;
+  --muted: #a8a497;
+  --faint: #8b887e;
+  --gold: #d9b673;
+  --gold-soft: rgb(217 182 115 / 0.14);
+  --tri: #5b93ff;
+  --rep: #ff9b45;
+  --skp: #ec4fa3;
+  --scr: #a983ff;
+  --ok: #4fcf7f;
+  --bad: #f2564b;
+  --amb: #f0b43c;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --cam: cubic-bezier(.65, 0, .35, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 400 16px/1.6 Geist, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--gold-soft); color: var(--text); }
+html { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+a { color: inherit; text-decoration: none; }
+/* continuous (squircle) corners where the browser supports them; others keep the plain radius */
+.btn, .frame, .step, .step .ic, .verdict, .code, .gh, .probe .in { corner-shape: squircle; }
+h1, h2, h3, .tt, .tabs .row span:last-child, .v-word .big { text-wrap: balance; }
+p, .bd span, .why { text-wrap: pretty; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 4px; }
+img { display: block; max-width: 100%; }
+.mono { font-family: "Geist Mono", ui-monospace, monospace; }
+.display { font-family: Spectral, Georgia, serif; font-weight: 300; letter-spacing: -0.02em; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left)); }
+@media (min-width: 768px) { .wrap { padding: 0 max(32px, env(safe-area-inset-right)) 0 max(32px, env(safe-area-inset-left)); } }
+
+/* film grain over everything, fixed so it never repaints on scroll */
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60; opacity: .035; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* reveal: visible by default, animated only once JS marks the page */
+.js .rv { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.js .rv.in { opacity: 1; transform: none; }
+
+
+/* blur placeholders: a 32px copy of each painting, inlined, blurred, under the real image until it loads */
+.hero, .close { --lqip: url(data:image/webp;base64,UklGRt4AAABXRUJQVlA4INIAAAAQBQCdASogABAAPrVInkmnJCKhMAgA4BaJYgCsIExqQPd0g54J6foZDkxl2H1wf2VQAP7a1hS/i4IATvU/j6x4jNpvn9eK7P0zDgEls5Nv2NkYd8YrLAHvnr6lc3Km7mZb+JWYAbFCp/60ODqObXcATxJSqTtdD03lHvLKr0ikymhDePiJy41sVeiGhLO/fbbFjX/7bNYF2y+sPy+dN0munpN77nJbbExpaP4upM18dSHRXaU2TdeR5Rdow6WAwhoEP9UKRQ0v8AzoePkHhsjgAAA=); }
+.band { --lqip: url(data:image/webp;base64,UklGRugAAABXRUJQVlA4INwAAADQBQCdASogABUAPrVSn0qnJSKhsBgIAOAWiWUAtulDwY5A1Ase1pAC2OgFUd7mmVTFyOATkrFAAP6yMWAvk33Jc2c2/fVFobKd8/56dVnLFZXYRbSwROSln7FCfanXy4KfodUAmhb09T5sZKKVulSRsaYfsxKH/eFboG/A+ICcMHhs2kzy44z+KLiUYwyEm+xQLGBx4PL1AzXqfOJe0v0n4ItgtgmsQ6GXrsdlpbaJYd4fv7GR9YKpoS8hYlotG+Tnt1FtEvAUJxNCZFoVNT7CyGI/yx7NkVSTwqAA); }
+.ph { position: absolute; inset: -40px; z-index: -3; background: var(--lqip) center / cover; filter: blur(24px); }
+.js .art-img { opacity: 0; transition: opacity .6s var(--ease); }
+.js .art-img.loaded, .still .art-img { opacity: 1; }
+
+
+/* view transitions between pages (the investigation pages come next); the nav stays put */
+@view-transition { navigation: auto; }
+header.nav { view-transition-name: site-nav; }
+::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 240ms; animation-timing-function: cubic-bezier(.16, 1, .3, 1); }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none; } }
+
+/* ---------- nav ---------- */
+header.nav { position: fixed; inset: 0 0 auto; z-index: 50; padding-top: env(safe-area-inset-top); border-bottom: 1px solid transparent; transition: background-color .3s, border-color .3s; }
+header.nav.solid { background: rgb(13 13 11 / .86); border-color: var(--line); backdrop-filter: blur(12px); }
+header.nav nav { height: 64px; display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand span { font-family: Spectral, serif; font-size: 24px; line-height: 1; letter-spacing: -0.01em; }
+.links { display: none; gap: 28px; font-size: 13.5px; color: rgb(236 232 221 / .78); }
+.links a:hover { color: var(--text); }
+@media (min-width: 900px) { .links { display: flex; } }
+.btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 6px; font-weight: 500; font-size: 15px; padding: 12px 20px; transition: transform .15s, background-color .2s, border-color .2s; }
+.btn:active { transform: scale(.98); }
+.btn-light { background: var(--text); color: #12110e; }
+.btn-light:hover { background: #fff; }
+.btn-light svg { transition: transform .2s var(--ease); }
+.btn-light:hover svg { transform: translateX(2px); }
+.btn-ghost { border: 1px solid rgb(236 232 221 / .3); color: var(--text); }
+.btn-ghost:hover { background: rgb(236 232 221 / .08); }
+.btn-sm { font-size: 13.5px; padding: 8px 14px; }
+/* touch screens: every tap target at least 44px tall without changing the look */
+@media (pointer: coarse) {
+  .btn, .brand { min-height: 44px; }
+  .links a { padding: 12px 0; }
+  .gh summary { padding: 12px 0; }
+}
+
+/* ---------- hero ---------- */
+.hero { position: relative; isolation: isolate; overflow: hidden; }
+.hero .art { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 62% 40%; transform: scale(1.06); transition: transform 2.4s var(--ease); }
+.hero.ready .art { transform: scale(1); }
+.hero::before { content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(90deg, rgb(10 10 8 / .9) 0%, rgb(10 10 8 / .66) 42%, rgb(10 10 8 / .18) 100%), linear-gradient(0deg, rgb(13 13 11 / .95) 0%, transparent 34%); }
+.hero .inner { min-height: 94dvh; display: flex; flex-direction: column; justify-content: flex-end; padding-top: 128px; padding-bottom: 236px; }
+.hero h1 { margin: 0; text-wrap: balance; font-size: clamp(2.5rem, 8vw, 6.4rem); line-height: .98; color: #fff; }
+.hero h1 em { display: inline-block; padding-bottom: 6px; font-style: italic; color: var(--gold); }
+.hero h1 .ln { display: block; overflow: hidden; padding: .1em 0 .16em; margin: -.1em 0 -.16em; }
+.hero h1 .ln > span { display: inline-block; }
+.js .hero h1 .ln > span { transform: translateY(105%); transition: transform 1.1s var(--ease); }
+.js .hero.ready h1 .ln > span { transform: none; }
+.js .hero.ready h1 .ln:nth-child(2) > span { transition-delay: .12s; }
+.hero p.lede { margin: 26px 0 0; max-width: 46ch; font-size: 18px; line-height: 1.6; color: rgb(255 255 255 / .8); }
+.hero .ctas { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 12px; }
+.credit { font: 400 11px/1.4 "Geist Mono", monospace; color: rgb(255 255 255 / .66); letter-spacing: .01em; }
+.hero .credit { position: absolute; right: 32px; top: 84px; }
+@media (max-width: 640px) { .hero .credit { display: none; } }
+
+/* ---------- run window (signature) ---------- */
+.runwin { position: relative; z-index: 5; margin: -176px auto 0; max-width: 1120px; padding: 0 20px; }
+@media (min-width: 768px) { .runwin { padding: 0 32px; } }
+.frame { border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); overflow: hidden; box-shadow: 0 30px 80px -30px rgb(0 0 0 / .8); }
+.frame-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.frame-bar .l { display: flex; align-items: center; gap: 10px; min-width: 0; font: 400 11.5px "Geist Mono", monospace; color: var(--muted); }
+.frame-bar .l b { color: var(--text); font-weight: 400; }
+.frame-bar .l { white-space: nowrap; }
+@media (max-width: 560px) { .label.argus { display: none; } }
+.frame-bar .t { font: 400 11.5px "Geist Mono", monospace; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dots { background-image: radial-gradient(var(--line-strong) 1px, transparent 1px); background-size: 18px 18px; }
+.stage { display: grid; grid-template-columns: 1fr; gap: 22px; padding: 26px 18px 28px; min-height: 520px; }
+@media (min-width: 900px) { .stage { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 40px; padding: 38px 40px; } }
+
+.label { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font: 500 11.5px "Geist Mono", monospace; border: 1px solid; transition: color .5s, border-color .5s, background-color .5s; }
+.label.argus { color: var(--gold); border-color: rgb(217 182 115 / .45); background: var(--gold-soft); }
+.label.verifying { color: var(--amb); border-color: rgb(240 180 60 / .45); background: rgb(240 180 60 / .1); }
+.label.changes { color: var(--bad); border-color: rgb(242 86 75 / .5); background: rgb(242 86 75 / .1); }
+.label.verified { color: var(--ok); border-color: rgb(79 207 127 / .45); background: rgb(79 207 127 / .1); }
+
+.claim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; }
+.claim .n { font-family: Spectral, serif; font-size: 64px; line-height: .8; font-weight: 300; }
+.claim .what { font-size: 15px; color: var(--muted); }
+.claim .what b { display: block; font: 400 11px "Geist Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+
+.steps { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 10px; }
+.step { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); padding: 10px 14px; transition: opacity .55s var(--ease), transform .55s var(--ease), border-color .5s; }
+.step .ic { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.step > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+.step .who { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 400 11px "Geist Mono", monospace; color: var(--muted); }
+.step .who b { color: var(--c); font-weight: 500; letter-spacing: .06em; }
+.step .smsg { display: block; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step .cmd { font: 400 11px "Geist Mono", monospace; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step .res { font: 500 12px "Geist Mono", monospace; display: flex; align-items: center; gap: 6px; }
+.js .step { opacity: 0; transform: translateY(8px); }
+.js .step.on { opacity: 1; transform: none; }
+.step.hot { border-color: color-mix(in srgb, var(--skp) 55%, transparent); }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .amb { color: var(--amb); }
+
+.verdict { align-self: center; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 22px; transition: opacity .7s var(--ease), transform .7s var(--ease), border-color .6s; }
+.js .verdict { opacity: .35; }
+.js .verdict.on { opacity: 1; border-color: rgb(242 86 75 / .45); }
+.verdict .vh { margin: 0; font: 400 11px "Geist Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.probe { margin-top: 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 8px 14px; align-items: center; font: 400 13px "Geist Mono", monospace; }
+.probe .in { color: var(--text); background: var(--surface-3); border-radius: 4px; padding: 1px 6px; white-space: pre; }
+.probe .note { color: var(--muted); font-size: 12px; }
+.probe .r { opacity: 0; transition: opacity .4s; }
+.probe .r.on { opacity: 1; }
+.v-word { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.v-word .big { font-family: Spectral, serif; font-weight: 300; font-size: 40px; line-height: 1.05; color: var(--bad); display: flex; align-items: center; gap: 12px; }
+.v-word .why .mono { white-space: pre; }
+.v-word .why { margin-top: 6px; font-size: 14px; color: var(--muted); }
+.js .v-word { opacity: 0; transform: translateY(6px); transition: opacity .6s var(--ease), transform .6s var(--ease); }
+.js .verdict.done .v-word { opacity: 1; transform: none; }
+.runcap { margin-top: 12px; text-align: right; font: 400 11px "Geist Mono", monospace; color: var(--faint); }
+
+/* ---------- sections ---------- */
+section.sec { padding-top: 120px; }
+@media (min-width: 768px) { section.sec { padding-top: 148px; } }
+h2.h { margin: 0; text-wrap: balance; font-size: clamp(2.2rem, 4.4vw, 3.6rem); line-height: 1.05; }
+h2.h em { font-style: normal; color: var(--muted); }
+.two { display: grid; grid-template-columns: 1fr; gap: 28px; }
+@media (min-width: 900px) { .two { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 80px; align-items: end; } }
+.body { font-size: 17px; line-height: 1.65; color: var(--muted); max-width: 52ch; margin: 0; }
+
+.cols { margin-top: 64px; display: grid; grid-template-columns: 1fr; border-top: 1px solid var(--line); }
+@media (min-width: 900px) { .cols { grid-template-columns: repeat(3, 1fr); } }
+.col { padding: 32px 0; display: flex; flex-direction: column; gap: 14px; }
+.col + .col { border-top: 1px solid var(--line); }
+@media (min-width: 900px) { .col { padding: 40px 28px; } .col:first-child { padding-left: 0; } .col + .col { border-top: 0; border-left: 1px solid var(--line); } }
+.col h3 { margin: 0; text-wrap: balance; font-size: 27px; line-height: 1.15; }
+.col p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--muted); max-width: 36ch; }
+.col svg { margin-top: 18px; width: 100%; height: auto; max-width: 340px; }
+.col .tag { font: 500 11px "Geist Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+
+/* ---------- myth band ---------- */
+.band { position: relative; isolation: isolate; overflow: hidden; margin-top: 140px; }
+.band img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 40% 45%; }
+.band::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgb(10 10 8 / .86) 0%, rgb(10 10 8 / .6) 55%, rgb(10 10 8 / .35) 100%); }
+.band .inner { min-height: 480px; display: flex; flex-direction: column; justify-content: center; padding-top: 88px; padding-bottom: 88px; }
+.band p.big { margin: 0; text-wrap: balance; max-width: 20ch; font-size: clamp(2.3rem, 5vw, 4.3rem); line-height: 1.02; color: #fff; }
+.band p.small { margin: 24px 0 0; max-width: 54ch; font-size: 16.5px; line-height: 1.65; color: rgb(255 255 255 / .78); }
+.band .credit { position: absolute; right: 32px; bottom: 18px; }
+
+/* ---------- pinned tour ---------- */
+.tour { position: relative; margin-top: 40px; display: none; }
+@media (min-width: 1024px) { .tour { display: block; } }
+.tour .pin { position: sticky; top: 64px; height: calc(100dvh - 64px); display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 48px; align-items: center; }
+.rail { list-style: none; margin: 0; padding: 0; }
+.rail li button { all: unset; cursor: pointer; display: block; width: 100%; padding: 14px 0 14px 22px; position: relative; }
+.rail li button::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--line-strong); }
+.rail li button::after { content: ""; position: absolute; left: -1px; top: 0; bottom: 0; width: 3px; background: var(--c); transform: scaleY(0); transform-origin: top; transition: transform .5s var(--ease); }
+.rail li.on button::after { transform: scaleY(1); }
+.rail .k { font: 500 11px "Geist Mono", monospace; color: var(--faint); display: flex; align-items: center; gap: 8px; }
+.rail li.on .k { color: var(--c); }
+.rail .tt { display: block; margin-top: 4px; font-family: Spectral, serif; font-weight: 300; font-size: 23px; line-height: 1.2; color: var(--faint); transition: color .3s; }
+.rail li.on .tt { color: var(--text); }
+.rail li:not(.on) button:hover .tt { color: var(--muted); }
+.rail .bd { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s var(--ease), opacity .45s; opacity: 0; }
+.rail li.on .bd { grid-template-rows: 1fr; opacity: 1; }
+.rail .bd > span { overflow: hidden; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.rail li.on .bd > span { padding-top: 8px; }
+
+.room { position: relative; aspect-ratio: 16 / 10.5; overflow: hidden; background: #111110; }
+.cam { position: absolute; left: 0; top: 0; width: 100%; padding: 28px 34px; transform-origin: 0 0; transition: transform 1.15s var(--cam); }
+.msg { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; padding: 12px 14px; border-radius: 8px; margin-bottom: 6px; transition: opacity .6s; }
+.msg .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--c); background: color-mix(in srgb, var(--c) 16%, #111110); }
+.msg .nm { font-size: 14.5px; font-weight: 600; color: var(--c); }
+.msg .nm small { font-weight: 400; color: var(--faint); font-size: 11.5px; margin-left: 8px; }
+.msg pre { margin: 4px 0 0; font: 400 13px/1.55 "Geist Mono", monospace; color: var(--text); white-space: pre-wrap; }
+.msg pre .q { color: var(--muted); border-left: 3px solid var(--line-strong); padding-left: 10px; display: block; }
+.msg pre .st { color: var(--faint); }
+.msg.banner { grid-template-columns: 40px 1fr; padding-top: 6px; padding-bottom: 6px; }
+.msg.banner pre { margin: 0; color: var(--gold); }
+.room.focus .msg { opacity: .32; }
+.room.focus .msg.lit { opacity: 1; }
+.ring { position: absolute; border-radius: 10px; pointer-events: none; box-shadow: 0 0 0 1.5px var(--c), 0 0 0 7px color-mix(in srgb, var(--c) 16%, transparent); opacity: 0; transition: opacity .5s .85s, left 0s .4s, top 0s .4s, width 0s .4s, height 0s .4s; }
+.ring.on { opacity: 1; }
+
+.tour-m { display: grid; gap: 48px; margin-top: 40px; }
+@media (min-width: 1024px) { .tour-m { display: none; } }
+.tour-m .k { font: 500 11px "Geist Mono", monospace; }
+.tour-m h3 { margin: 4px 0 0; font-size: 25px; }
+.tour-m p { margin: 8px 0 16px; font-size: 15px; color: var(--muted); }
+
+/* ---------- evidence (auto-advancing) ---------- */
+.ev { margin-top: 56px; display: grid; grid-template-columns: 1fr; gap: 32px; }
+@media (min-width: 900px) { .ev { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; } }
+.tabs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.tabs li { border-bottom: 1px solid var(--line); position: relative; }
+.tabs button { all: unset; cursor: pointer; display: block; width: 100%; padding: 20px 0; }
+.tabs .row { display: flex; align-items: baseline; gap: 16px; }
+.tabs .row span:first-child { font: 400 11px "Geist Mono", monospace; color: var(--faint); }
+.tabs .row span:last-child { font-family: Spectral, serif; font-weight: 300; font-size: 30px; line-height: 1; color: var(--faint); transition: color .3s; }
+.tabs li.on .row span { color: var(--text); }
+.tabs li.on .row span:first-child { color: var(--gold); }
+.tabs button:hover .row span:last-child { color: var(--muted); }
+.tabs .bd { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .45s var(--ease), opacity .45s; }
+.tabs li.on .bd { grid-template-rows: 1fr; opacity: 1; }
+.tabs .bd p { overflow: hidden; margin: 0; padding-left: 34px; font-size: 15px; line-height: 1.6; color: var(--muted); max-width: 52ch; }
+.tabs li.on .bd p { padding-top: 12px; }
+.tabs .prog { position: absolute; left: 0; bottom: -1px; height: 1px; width: 0; background: var(--gold); }
+
+.panes { position: relative; min-height: 520px; }
+.pane { position: absolute; inset: 0 0 auto 0; opacity: 0; transform: translateY(10px); transition: opacity .35s var(--ease), transform .35s var(--ease); pointer-events: none; }
+.pane.on { opacity: 1; transform: none; pointer-events: auto; position: relative; }
+.code { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.code .bar { display: flex; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--line); font: 400 11.5px "Geist Mono", monospace; color: var(--faint); }
+.code pre { margin: 0; padding: 18px 20px; font: 400 13px/1.7 "Geist Mono", monospace; color: var(--text); overflow-x: auto; }
+.code .c { color: var(--faint); } .code .g { color: var(--gold); }
+
+/* github comment mock */
+.gh { border: 1px solid #30363d; border-radius: 8px; background: #0d1117; color: #e6edf3; font: 14px/1.5 -apple-system, "Segoe UI", Geist, sans-serif; overflow: hidden; }
+.gh .hd { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: #151b23; border-bottom: 1px solid #30363d; font-size: 13px; color: #9198a1; }
+.gh .hd b { color: #e6edf3; font-weight: 600; }
+.gh .hd .bot { border: 1px solid #3d444d; border-radius: 999px; font-size: 11px; padding: 0 6px; }
+.gh .bd { padding: 16px 18px 18px; }
+.gh h3 { margin: 0 0 12px; font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.gh table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.gh th, .gh td { border: 1px solid #30363d; padding: 6px 10px; text-align: left; vertical-align: top; }
+.gh th { background: #151b23; font-weight: 600; }
+.gh tr:nth-child(2n) td { background: #151b2366; }
+.gh code { font: 12px "Geist Mono", monospace; background: #656c7633; border-radius: 5px; padding: 1px 5px; }
+.gh details { border-top: 1px solid #30363d; padding: 8px 0; font-size: 13px; }
+.gh summary { cursor: pointer; color: #e6edf3; }
+.gh .foot { margin-top: 12px; font-size: 13px; color: #9198a1; }
+.gh .foot a { color: #4493f8; }
+
+/* ---------- where it runs ---------- */
+.rows { margin-top: 56px; border-top: 1px solid var(--line); }
+.rowx { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 900px) { .rowx { grid-template-columns: 240px 1fr; align-items: center; } }
+.rowx > span { font: 500 11px "Geist Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 14px; font-size: 14.5px; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+
+/* ---------- closing ---------- */
+.close { position: relative; isolation: isolate; overflow: hidden; margin-top: 148px; }
+.close img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; object-position: 80% 55%; opacity: .75; }
+.close::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgb(10 10 8 / .9), rgb(10 10 8 / .6)); }
+.close .inner { display: flex; flex-direction: column; gap: 36px; padding-top: 128px; padding-bottom: 128px; }
+@media (min-width: 900px) { .close .inner { flex-direction: row; align-items: flex-end; justify-content: space-between; } }
+.close h2 { margin: 0; max-width: 15ch; font-size: clamp(2.4rem, 5.4vw, 4.6rem); line-height: 1.02; color: #fff; }
+.close .count { margin-top: 18px; font-size: 16px; color: rgb(255 255 255 / .72); }
+.close .count b { font-family: "Geist Mono", monospace; font-weight: 500; color: #fff; font-variant-numeric: tabular-nums; }
+footer { border-top: 1px solid rgb(255 255 255 / .14); padding-top: 28px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: rgb(255 255 255 / .6); }
+@media (min-width: 900px) { footer { flex-direction: row; justify-content: space-between; } }
+
+.still .rv, .still .step, .still .verdict, .still .v-word, .still .hero h1 .ln > span { opacity: 1 !important; transform: none !important; transition: none !important; }
+.still .cam, .still .hero .art, .still * { transition: none !important; }
+.still .art-img { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .js .rv, .js .step, .js .verdict, .js .v-word, .js .hero h1 .ln > span { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .cam, .hero .art { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-tri" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.4 13.4 8.5 15.5 10.6 10.6z"/></g></symbol>
+    <symbol id="i-rep" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M9.5 3h5M10.5 3v5.6L5.2 18.2A1.9 1.9 0 0 0 6.9 21h10.2a1.9 1.9 0 0 0 1.7-2.8L13.5 8.6V3"/><path d="M7.6 14h8.8"/></g></symbol>
+    <symbol id="i-skp" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.4 15.4 5.1 5.1"/></g></symbol>
+    <symbol id="i-scr" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M6 4h10a2 2 0 0 1 2 2v12a2 2 0 0 0 2 2H8a2 2 0 0 1-2-2z"/><path d="M6 4a2 2 0 0 0-2 2v1h2M9.5 9h5M9.5 12.5h5M9.5 16h3"/></g></symbol>
+    <symbol id="i-eye" viewBox="0 0 32 32"><path d="M2.5 16C6.6 9.6 11 6.6 16 6.6S25.4 9.6 29.5 16C25.4 22.4 21 25.4 16 25.4S6.6 22.4 2.5 16Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="16" cy="16" r="6.2" fill="#d9b673"/><circle cx="16" cy="16" r="2.6" fill="#0d0d0b"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h9.5M8.5 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-no" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav" id="nav">
+  <nav class="wrap">
+    <a class="brand" href="#top" aria-label="Argus, back to top"><svg width="30" height="30"><use href="#i-eye"/></svg><span>Argus</span></a>
+    <div class="links"><a href="#how">How it works</a><a href="#evidence">The evidence</a><a href="#runs">Where it runs</a><a href="#">Investigations</a></div>
+    <a class="btn btn-light btn-sm" href="https://github.com/apps/argus-v1/installations/new">Install on GitHub</a>
+  </nav>
+</header>
+
+<main id="top">
+  <!-- hero -->
+  <section class="hero" id="hero">
+    <div class="ph"></div><img class="art art-img" src="assets/velazquez.webp" alt="" fetchpriority="high">
+    <div class="wrap inner">
+      <h1 class="display"><span class="ln"><span>Don't close the door.</span></span><span class="ln"><span><em>Make them prove it.</em></span></span></h1>
+      <p class="lede rv">AI made pull requests cheap to write and slow to check. Add the <span class="mono" style="font-size:.9em">argus</span> label to one, and four agents prove or break its claim with real tests, then post the evidence on GitHub.</p>
+      <div class="ctas rv">
+        <a class="btn btn-light" href="https://github.com/apps/argus-v1/installations/new">Install the GitHub App <svg width="16" height="16"><use href="#i-arrow"/></svg></a>
+        <a class="btn btn-ghost" href="#how">Watch a run</a>
+      </div>
+    </div>
+    <p class="credit">Diego Velázquez, Mercury and Argus, c. 1659 (detail)</p>
+  </section>
+
+  <!-- the run, looping -->
+  <div class="runwin rv" id="run">
+    <div class="frame">
+      <div class="frame-bar">
+        <div class="l"><svg width="20" height="20" style="color:var(--text)"><use href="#i-eye"/></svg><b>argus-v1/datewise</b> · PR #2</div>
+        <div style="display:flex;gap:8px;align-items:center"><span class="label argus">argus</span><span class="label verifying" id="lbl">verifying</span></div>
+      </div>
+      <div class="stage dots">
+        <div>
+          <div class="claim">
+            <span class="n">4</span>
+            <span class="what"><b>Agents on one claim</b>“Fix crash when parse_date gets an empty string”</span>
+          </div>
+          <ol class="steps" id="steps">
+            <li class="step" style="--c:var(--tri)"><span class="ic"><svg width="18" height="18"><use href="#i-tri"/></svg></span><span><span class="who"><b>TRIAGER</b> · Claude · scoping</span><span class="smsg">Claim: <span class="mono">parse_date('')</span> no longer raises</span></span><span class="res" style="color:var(--muted)">scope.json</span></li>
+            <li class="step" style="--c:var(--rep)"><span class="ic"><svg width="18" height="18"><use href="#i-rep"/></svg></span><span><span class="who"><b>REPRODUCER</b> · Codex · reproducing</span><span class="cmd" style="display:block">test_argus_2.py @ main</span></span><span class="res bad"><svg width="14" height="14"><use href="#i-no"/></svg>FAILED</span></li>
+            <li class="step" style="--c:var(--rep)"><span class="ic"><svg width="18" height="18"><use href="#i-rep"/></svg></span><span><span class="who"><b>REPRODUCER</b> · Codex · reproducing</span><span class="cmd" style="display:block">test_argus_2.py @ pr-2</span></span><span class="res ok"><svg width="14" height="14"><use href="#i-ok"/></svg>PASSED</span></li>
+            <li class="step hot" style="--c:var(--skp)"><span class="ic"><svg width="18" height="18"><use href="#i-skp"/></svg></span><span><span class="who"><b>SKEPTIC</b> · Claude · challenging</span><span class="smsg">Whitespace-only input still crashes</span></span><span class="res bad"><svg width="14" height="14"><use href="#i-no"/></svg>FAILED</span></li>
+            <li class="step" style="--c:var(--scr)"><span class="ic"><svg width="18" height="18"><use href="#i-scr"/></svg></span><span><span class="who"><b>SCRIBE</b> · Claude · reporting</span><span class="smsg">Evidence comment posted on GitHub</span></span><span class="res" style="color:var(--muted)">comment.md</span></li>
+          </ol>
+        </div>
+        <div class="verdict" id="verdict">
+          <p class="vh">The Skeptic's probes on pr-2</p>
+          <div class="probe">
+            <span class="in">parse_date('')</span><span class="note">the reported case</span><span class="r ok" id="p1"><svg width="14" height="14"><use href="#i-ok"/></svg></span>
+            <span class="in">parse_date('   ')</span><span class="note">whitespace only</span><span class="r bad" id="p2"><svg width="14" height="14"><use href="#i-no"/></svg></span>
+            <span class="in">full suite</span><span class="note">19 passed, 0 failed</span><span class="r ok" id="p3"><svg width="14" height="14"><use href="#i-ok"/></svg></span>
+          </div>
+          <div class="v-word">
+            <div class="big"><svg width="26" height="26"><use href="#i-no"/></svg>Changes needed</div>
+            <div class="why">The fix handles <span class="mono">''</span> but <span class="mono">'   '</span> still raises IndexError.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="runcap">Demo scenario on argus-v1/datewise, replayed</p>
+  </div>
+
+  <!-- the problem -->
+  <section class="sec" id="problem">
+    <div class="wrap">
+      <div class="two">
+        <h2 class="h display rv">Pull requests got cheap to write. Checking one still costs an hour.</h2>
+        <p class="body rv">A maintainer wakes up to thirty of them. Most look professional and many were written by an AI in seconds. Some fix nothing. She can burn out reviewing every one, or stop taking outside contributions. Argus is the third choice.</p>
+      </div>
+      <div class="cols">
+        <div class="col rv">
+          <h3 class="display">Looks finished</h3>
+          <p>Clean diff, confident description, no test. Reading it tells you nothing about whether the bug is gone.</p>
+          <svg viewBox="0 0 340 120" aria-hidden="true"><rect x="1" y="14" width="200" height="92" rx="8" fill="none" stroke="rgb(255 250 235 / .16)"/><path d="M18 38h120M18 56h150M18 74h96M18 92h130" stroke="rgb(255 250 235 / .22)" stroke-width="5" stroke-linecap="round"/><rect x="232" y="44" width="96" height="32" rx="6" fill="rgb(240 180 60 / .1)" stroke="rgb(240 180 60 / .5)"/><text x="280" y="64.5" text-anchor="middle" font-family="Geist Mono" font-size="11" fill="#f0b43c">no test</text><path d="M202 60h28" stroke="rgb(255 250 235 / .25)" stroke-dasharray="3 4"/></svg>
+        </div>
+        <div class="col rv">
+          <h3 class="display">Fixes the example, not the bug</h3>
+          <p>It handles the exact input in the issue. The input next to it still crashes, and nobody tried it.</p>
+          <svg viewBox="0 0 340 120" aria-hidden="true"><rect x="1" y="22" width="170" height="34" rx="6" fill="none" stroke="rgb(79 207 127 / .5)"/><text x="16" y="44" font-family="Geist Mono" font-size="12" fill="#ece8dd">parse_date('')</text><path d="m184 34 5 5 10-11" fill="none" stroke="#4fcf7f" stroke-width="2"/><rect x="1" y="68" width="170" height="34" rx="6" fill="rgb(242 86 75 / .1)" stroke="rgb(242 86 75 / .6)"/><text x="16" y="90" font-family="Geist Mono" font-size="12" fill="#ece8dd" xml:space="preserve" style="white-space:pre">parse_date('   ')</text><text x="184" y="90" font-family="Geist Mono" font-size="11.5" fill="#f2564b">IndexError</text></svg>
+        </div>
+        <div class="col rv">
+          <h3 class="display">Or the door closes</h3>
+          <p>Some projects have already stopped taking outside pull requests. The honest contributor loses the most.</p>
+          <svg viewBox="0 0 340 120" aria-hidden="true"><g fill="rgb(255 250 235 / .2)"><circle cx="20" cy="40" r="5"/><circle cx="20" cy="62" r="5"/><circle cx="20" cy="84" r="5"/><circle cx="46" cy="51" r="5"/><circle cx="46" cy="73" r="5"/></g><path d="M60 62h96" stroke="rgb(255 250 235 / .25)" stroke-dasharray="3 4"/><rect x="164" y="14" width="10" height="96" rx="2" fill="#ece8dd" opacity=".75"/><rect x="190" y="30" width="138" height="64" rx="8" fill="none" stroke="rgb(255 250 235 / .16)"/><text x="259" y="66" text-anchor="middle" font-family="Geist Mono" font-size="11" fill="#8b887e">maintainers</text></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- the myth -->
+  <section class="band" id="band">
+    <div class="ph"></div><img class="art-img" src="assets/peacock.webp" alt="" loading="lazy">
+    <div class="wrap inner">
+      <p class="big display rv">A hundred eyes, never all closed at once.</p>
+      <p class="small rv">In the myth, Hermes played music until every one of Argus's eyes fell shut. A pull request that reads well plays the same tune. Argus keeps one agent awake whose only job is to break the proof, and it runs on a different model from the agent that wrote it.</p>
+    </div>
+    <p class="credit">Peter Paul Rubens, Juno and Argus, c. 1610 (detail)</p>
+  </section>
+
+  <!-- how it works: pinned tour -->
+  <section class="sec" id="how">
+    <div class="wrap">
+      <div class="two">
+        <h2 class="h display rv">Four agents. One claim. <em>Every step on the record.</em></h2>
+        <p class="body rv">They work in your team's Discord room, so you can watch or step in. Each one does a single job, hands its file to the next, and says what it ran. Scroll to follow one run.</p>
+      </div>
+
+      <div class="tour" id="tour" style="height:340vh">
+        <div class="pin">
+          <ol class="rail" id="rail">
+            <li style="--c:var(--tri)"><button data-i="0"><span class="k"><svg width="14" height="14"><use href="#i-tri"/></svg>01 · Triager</span><span class="tt">Scopes the claim</span><span class="bd"><span>Reads the PR, the linked issue and CONTRIBUTING.md, and writes down exactly what the PR says it fixes. That claim, and nothing else, gets tested.</span></span></button></li>
+            <li style="--c:var(--rep)"><button data-i="1"><span class="k"><svg width="14" height="14"><use href="#i-rep"/></svg>02 · Reproducer</span><span class="tt">Proves the bug</span><span class="bd"><span>Writes a test that fails on main and passes on the PR. Every run happens in a Docker sandbox with no network, so contributor code never runs on the host.</span></span></button></li>
+            <li style="--c:var(--skp)"><button data-i="2"><span class="k"><svg width="14" height="14"><use href="#i-skp"/></svg>03 · Skeptic</span><span class="tt">Tries to break it</span><span class="bd"><span>A different model re-runs the proof from its own clone and probes the edges. Here it finds that whitespace-only input still crashes.</span></span></button></li>
+            <li style="--c:var(--scr)"><button data-i="3"><span class="k"><svg width="14" height="14"><use href="#i-scr"/></svg>04 · Scribe</span><span class="tt">Writes the verdict</span><span class="bd"><span>Turns the evidence into one GitHub comment by fixed rules, and Argus sets the label. You merge with GitHub's own button, as always.</span></span></button></li>
+          </ol>
+          <div class="frame">
+            <div class="frame-bar"><div class="l" style="margin:0 auto"># pr-review</div></div>
+            <div class="room" id="room">
+              <div class="cam" id="cam">
+                <div class="msg banner" style="--c:var(--gold)"><span></span><pre>▶ Stage 1/5 · Scoping · PR #2</pre></div>
+                <div class="msg" data-s="0" style="--c:var(--tri)"><span class="av"><svg width="20" height="20"><use href="#i-tri"/></svg></span><div><div class="nm">triager<small>Claude Code</small></div><pre>TRIAGER · PR #2 · scoping
+Claim: parse_date('') returns None instead of raising.
+<span class="q">&gt; read pr.json, issue #1, CONTRIBUTING.md  -&gt;  scope.json</span><span class="st">model: Claude · 9s
+STATUS: done</span></pre></div></div>
+                <div class="msg banner" style="--c:var(--gold)"><span></span><pre>▶ Stage 2/5 · Reproducing · PR #2</pre></div>
+                <div class="msg" data-s="1" style="--c:var(--rep)"><span class="av"><svg width="20" height="20"><use href="#i-rep"/></svg></span><div><div class="nm">reproducer<small>Codex</small></div><pre>REPRODUCER · PR #2 · reproducing
+Bug is real: IndexError on main. The PR's code passes.
+<span class="q">&gt; pytest test_argus_2.py @ main  -&gt;  FAILED
+&gt; pytest test_argus_2.py @ pr-2  -&gt;  PASSED</span><span class="st">model: Codex · 32s
+STATUS: done</span></pre></div></div>
+                <div class="msg banner" style="--c:var(--gold)"><span></span><pre>▶ Stage 3/5 · Challenging · PR #2</pre></div>
+                <div class="msg" data-s="2" style="--c:var(--skp)"><span class="av"><svg width="20" height="20"><use href="#i-skp"/></svg></span><div><div class="nm">skeptic<small>Claude Code</small></div><pre>SKEPTIC · PR #2 · challenging
+Passes for ''. Fails for '   ' (whitespace). Same IndexError.
+<span class="q">&gt; pytest test_argus_2_probes.py::test_whitespace  -&gt;  FAILED</span><span class="st">model: Claude · 31s
+STATUS: done</span></pre></div></div>
+                <div class="msg banner" style="--c:var(--gold)"><span></span><pre>▶ Stage 4/5 · Reporting · PR #2</pre></div>
+                <div class="msg" data-s="3" style="--c:var(--scr)"><span class="av"><svg width="20" height="20"><use href="#i-scr"/></svg></span><div><div class="nm">scribe<small>Claude Code</small></div><pre>SCRIBE · PR #2 · reporting
+Verdict: changes needed. Evidence comment ready for GitHub.
+<span class="q">&gt; 4 claims checked  -&gt;  3 passed · 1 failed</span><span class="st">model: Claude · 7s
+STATUS: done</span></pre></div></div>
+                <div class="msg banner" style="--c:var(--gold)"><span></span><pre>■ Stage 5/5 · Verdict · PR #2 · Changes needed</pre></div>
+              </div>
+              <div class="ring" id="ring"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tour-m" id="tourm"></div>
+    </div>
+  </section>
+
+  <!-- the evidence -->
+  <section class="sec" id="evidence">
+    <div class="wrap">
+      <div class="two">
+        <h2 class="h display rv">One comment. Fifteen seconds. <em>Every line has a receipt.</em></h2>
+        <p class="body rv">The verdict and its one reason come first. Each claim names the command that proved it. Logs fold away until you want them, and the full timeline and a bundle to re-run it yourself are one click down.</p>
+      </div>
+      <div class="ev" id="ev">
+        <ol class="tabs" id="tabs">
+          <li class="on"><button data-i="0"><div class="row"><span>01</span><span>Label</span></div><div class="bd"><p>A maintainer adds the <span class="mono">argus</span> label. That is the whole setup per PR. A new push to a labelled PR starts a fresh run on its own.</p></div></button><span class="prog"></span></li>
+          <li><button data-i="1"><div class="row"><span>02</span><span>Prove</span></div><div class="bd"><p>Every claim is a test run in the sandbox: no network, CPU and time limits, the output kept as evidence.</p></div></button><span class="prog"></span></li>
+          <li><button data-i="2"><div class="row"><span>03</span><span>Decide</span></div><div class="bd"><p>The Scribe writes one comment by fixed rules. One failed claim means it is not verified. No rounding up.</p></div></button><span class="prog"></span></li>
+        </ol>
+        <div class="panes">
+          <div class="pane on" data-p="0"><div class="code"><div class="bar"><span>github · pull request #2</span><span>labels</span></div><pre><span class="c"># the maintainer adds one label</span>
+<span class="g">+ argus</span>
+
+<span class="c"># Argus answers with its status label</span>
+<span class="g">+ verifying</span>          <span class="c">agents are working</span>
+<span class="g">~ changes-needed</span>     <span class="c">a claim failed</span>
+<span class="g">~ verified</span>           <span class="c">every claim proven</span></pre></div></div>
+          <div class="pane" data-p="1"><div class="code"><div class="bar"><span>sandbox · repro-main.log</span><span>docker · --network none</span></div><pre>$ run_tests --ref main --test tests/test_argus_2.py
+<span class="c">  ref main @ 3f9c2e1 · cpus 1 · timeout 60s</span>
+
+tests/test_argus_2.py::test_empty_string FAILED
+
+    text = text.strip()
+&gt;   if text[0] == "+":
+<span style="color:var(--bad)">E   IndexError: string index out of range</span>
+
+<span class="c">1 failed in 0.21s</span></pre></div></div>
+          <div class="pane" data-p="2"><div class="gh"><div class="hd"><svg width="20" height="20" style="color:#e6edf3"><use href="#i-eye"/></svg><b>argus-v1</b><span class="bot">bot</span>commented just now</div><div class="bd">
+            <h3>Argus verification · PR #2</h3>
+            <div><b style="color:var(--bad)">✘ Changes needed</b> — the fix handles <code>''</code> but <code>'   '</code> still crashes.</div>
+            <table><tr><th>Claim</th><th>Result</th><th>Proof</th></tr>
+              <tr><td>Bug exists on <code>main</code></td><td>✔</td><td><code>test_argus_2.py</code> fails with <code>IndexError</code></td></tr>
+              <tr><td>PR fixes <code>''</code></td><td>✔</td><td>same test passes on <code>pr-2</code></td></tr>
+              <tr><td>Whitespace <code>'   '</code></td><td>✘</td><td>probe fails with <code>IndexError</code></td></tr>
+              <tr><td>Existing suite</td><td>✔</td><td>19 passed, 0 failed</td></tr></table>
+            <details><summary>Reproduction on main</summary></details>
+            <details><summary>Skeptic's probes on pr-2</summary></details>
+            <div class="foot">Triager (Claude) · Reproducer (Codex) · Skeptic (Claude) · Scribe (Claude)<br><a href="#">Investigation timeline</a> · <a href="#">Verify it yourself</a></div>
+          </div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- where it runs -->
+  <section class="sec" id="runs">
+    <div class="wrap">
+      <div class="two">
+        <h2 class="h display rv">Your repo. Your room. <em>Your merge button.</em></h2>
+        <p class="body rv">Argus fits the flow you already have. The GitHub thread stays the record, Discord is the side channel, and approvals happen where they always did.</p>
+      </div>
+      <div class="rows rv">
+        <div class="rowx"><span>Agents</span><div class="chips"><span class="chip" style="--c:var(--tri)"><i></i>Triager · Claude Code</span><span class="chip" style="--c:var(--rep)"><i></i>Reproducer · Codex</span><span class="chip" style="--c:var(--skp)"><i></i>Skeptic · Claude Code</span><span class="chip" style="--c:var(--scr)"><i></i>Scribe · Claude Code</span></div></div>
+        <div class="rowx"><span>Room</span><div class="chips"><span class="chip">Discord</span><span class="chip">Switch</span></div></div>
+        <div class="rowx"><span>Record</span><div class="chips"><span class="chip">GitHub comment and labels</span><span class="chip">Public investigation page</span><span class="chip">Event log</span></div></div>
+        <div class="rowx"><span>Sandbox</span><div class="chips"><span class="chip">Docker</span><span class="chip">No network</span><span class="chip">CPU and time limits</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- closing -->
+  <section class="close" id="closing">
+    <div class="ph"></div><img class="art-img" src="assets/velazquez.webp" alt="" loading="lazy">
+    <div class="wrap inner">
+      <div>
+        <h2 class="display">Add one label. Get the proof.</h2>
+        <p class="count"><b id="count">0</b> pull requests verified so far, each with a public page.</p>
+      </div>
+      <a class="btn btn-light" href="https://github.com/apps/argus-v1/installations/new">Install the GitHub App <svg width="16" height="16"><use href="#i-arrow"/></svg></a>
+    </div>
+    <footer class="wrap">
+      <span>Paintings: Diego Velázquez, c. 1659 · Peter Paul Rubens, c. 1610 · public domain</span>
+      <span>Argus · argus-v1</span>
+    </footer>
+  </section>
+</main>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches || location.search.includes("static");
+  if (reduce) document.documentElement.classList.add("still");
+  document.documentElement.classList.add("js");
+
+  // nav: light over the painting, solid once past the hero
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("solid", scrollY > innerHeight * 0.55);
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+  // capture helper for design review: ?static&only=<section id>[&step=n] hides what comes before it
+  const q = new URLSearchParams(location.search);
+  if (q.get("only")) {
+    const target = document.getElementById(q.get("only"));
+    for (const el of document.querySelector("main").children) { if (el === target) break; el.style.display = "none"; }
+    nav.classList.add("solid"); document.body.style.paddingTop = "64px";
+  }
+
+  // fade each painting in over its blur placeholder once it has loaded
+  document.querySelectorAll(".art-img").forEach((img) => {
+    const done = () => img.classList.add("loaded");
+    if (img.complete && img.naturalWidth) done(); else img.addEventListener("load", done, { once: true });
+  });
+
+  // hero entrance
+  requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById("hero").classList.add("ready")));
+
+  // reveal on scroll, staggered within a group
+  const io = new IntersectionObserver((es) => es.forEach((e) => {
+    if (!e.isIntersecting) return;
+    const sibs = [...e.target.parentElement.children].filter((c) => c.classList.contains("rv"));
+    e.target.style.transitionDelay = (sibs.indexOf(e.target) * 0.08) + "s";
+    e.target.classList.add("in"); io.unobserve(e.target);
+  }), { threshold: 0.2 });
+  document.querySelectorAll(".rv").forEach((el) => io.observe(el));
+
+  // --- the run, as one calm loop ---
+  const steps = [...document.querySelectorAll("#steps .step")];
+  const verdict = document.getElementById("verdict");
+  const lbl = document.getElementById("lbl");
+  const probes = ["p1", "p2", "p3"].map((id) => document.getElementById(id));
+  const setLabel = (cls, txt) => { lbl.className = "label " + cls; lbl.textContent = txt; };
+  const finalState = () => { steps.forEach((s) => s.classList.add("on")); probes.forEach((p) => p.classList.add("on")); verdict.classList.add("on", "done"); setLabel("changes", "changes-needed"); };
+  if (reduce) finalState();
+  else {
+    let timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const run = () => {
+      timers.forEach(clearTimeout); timers = [];
+      steps.forEach((s) => s.classList.remove("on")); probes.forEach((p) => p.classList.remove("on"));
+      verdict.classList.remove("on", "done"); setLabel("verifying", "verifying");
+      [300, 1500, 2600, 4000, 6900].forEach((t, i) => at(t, () => steps[i].classList.add("on")));
+      at(4300, () => verdict.classList.add("on"));
+      at(4700, () => probes[0].classList.add("on"));
+      at(5400, () => probes[1].classList.add("on"));
+      at(6000, () => probes[2].classList.add("on"));
+      at(7500, () => { verdict.classList.add("done"); setLabel("changes", "changes-needed"); });
+      at(12500, run);
+    };
+    // only play while visible
+    let playing = false;
+    new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !playing) { playing = true; run(); }
+      if (!e.isIntersecting && playing) { playing = false; timers.forEach(clearTimeout); finalState(); }
+    }, { threshold: 0.3 }).observe(document.querySelector(".runwin"));
+  }
+
+  // --- pinned tour: scroll drives the step, the camera glides to that message ---
+  const tour = document.getElementById("tour"), rail = [...document.querySelectorAll("#rail li")];
+  const room = document.getElementById("room"), cam = document.getElementById("cam"), ring = document.getElementById("ring");
+  const msgs = [...document.querySelectorAll("#cam .msg[data-s]")];
+  let active = -1;
+  const focus = (i) => {
+    if (i === active) return; active = i;
+    rail.forEach((li, k) => li.classList.toggle("on", k === i));
+    msgs.forEach((m, k) => m.classList.toggle("lit", k === i));
+    room.classList.add("focus");
+    const m = msgs[i], k = 1.35;
+    const W = room.clientWidth, H = room.clientHeight;
+    const cx = (m.offsetLeft + m.offsetWidth * 0.42), cy = m.offsetTop + m.offsetHeight / 2;
+    let x = W / 2 - cx * k, y = H / 2 - cy * k;
+    x = Math.min(0, Math.max(W - cam.offsetWidth * k, x));
+    y = Math.min(0, Math.max(H - cam.offsetHeight * k, y));
+    cam.style.transform = reduce ? `translate(0,${Math.min(0, H / 2 - cy)}px)` : `translate(${x}px,${y}px) scale(${k})`;
+    const kk = reduce ? 1 : k, xx = reduce ? 0 : x, yy = reduce ? Math.min(0, H / 2 - cy) : y;
+    ring.style.setProperty("--c", getComputedStyle(m).getPropertyValue("--c"));
+    ring.classList.remove("on");
+    ring.style.left = (xx + m.offsetLeft * kk - 4) + "px"; ring.style.top = (yy + m.offsetTop * kk - 4) + "px";
+    ring.style.width = (m.offsetWidth * kk + 8) + "px"; ring.style.height = (m.offsetHeight * kk + 8) + "px";
+    void ring.offsetWidth; ring.classList.add("on");
+  };
+  const onTour = () => {
+    const r = tour.getBoundingClientRect(), span = tour.offsetHeight - innerHeight;
+    const v = Math.min(1, Math.max(0, -r.top / span));
+    focus(Math.min(3, Math.floor(v * 4)));
+  };
+  if (q.get("step")) { tour.style.height = "auto"; tour.querySelector(".pin").style.position = "relative"; tour.querySelector(".pin").style.height = "780px"; addEventListener("load", () => { active = -1; focus(+q.get("step")); }); }
+  else addEventListener("scroll", onTour, { passive: true }); addEventListener("resize", () => { active = -1; onTour(); });
+  if (!q.get("step")) onTour();
+  rail.forEach((li, i) => li.querySelector("button").addEventListener("click", () => {
+    const top = tour.getBoundingClientRect().top + scrollY, span = tour.offsetHeight - innerHeight;
+    scrollTo({ top: top + span * (i + 0.5) / 4, behavior: reduce ? "auto" : "smooth" });
+  }));
+
+  // mobile tour: one framed message per step
+  const tm = document.getElementById("tourm");
+  rail.forEach((li, i) => {
+    const d = document.createElement("div");
+    d.innerHTML = `<span class="k" style="color:${getComputedStyle(li).getPropertyValue("--c")}">${li.querySelector(".k").textContent}</span><h3 class="display">${li.querySelector(".tt").textContent}</h3><p>${li.querySelector(".bd span").textContent}</p>`;
+    const f = document.createElement("div"); f.className = "frame";
+    const c = msgs[i].cloneNode(true); c.style.margin = "10px"; f.appendChild(c); d.appendChild(f); tm.appendChild(d);
+  });
+
+  // --- evidence: three steps that advance on their own until someone picks one ---
+  const tabs = [...document.querySelectorAll("#tabs li")], panes = [...document.querySelectorAll(".pane")];
+  const ADV = 7000; let cur = 0, auto = true, paused = false, inView = false, t = null;
+  const show = (i) => {
+    cur = i;
+    tabs.forEach((li, k) => li.classList.toggle("on", k === i));
+    panes.forEach((p, k) => p.classList.toggle("on", k === i));
+    tabs.forEach((li) => { const p = li.querySelector(".prog"); p.style.transition = "none"; p.style.width = "0"; });
+    const p = tabs[i].querySelector(".prog"); void p.offsetWidth;
+    const running = auto && !paused && inView && !reduce;
+    p.style.transition = running ? `width ${ADV}ms linear` : "none"; p.style.width = "100%";
+    clearTimeout(t); if (running) t = setTimeout(() => show((cur + 1) % tabs.length), ADV);
+  };
+  tabs.forEach((li, i) => li.querySelector("button").addEventListener("click", () => { auto = false; show(i); }));
+  const ev = document.getElementById("ev");
+  ev.addEventListener("mouseenter", () => { paused = true; show(cur); });
+  ev.addEventListener("mouseleave", () => { paused = false; show(cur); });
+  new IntersectionObserver(([e]) => { inView = e.isIntersecting; show(cur); }, { threshold: 0.4 }).observe(ev);
+})();
+</script>
+</body>
+</html>

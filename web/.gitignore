@@ -1,0 +1,5 @@
+# Impeccable working files: review captures, decision-round sketches, hook cache
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/questions/
+.impeccable/hook.cache.json
