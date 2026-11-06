@@ -50,6 +50,7 @@ Turn the evidence into **one GitHub comment** a busy maintainer can trust in 15 
 
 - Leave `{{INVESTIGATION_URL}}` and `{{BUNDLE_URL}}` exactly as written. Argus fills them in.
 - Logs: last 20 lines only, inside `<details>`.
+- Read the `.json` results; open a `.log` only for a run that failed. Keep `comment.md` under 50 lines, with one `<details>` block per failing run plus the suite.
 - The verdict sentence names the single most important reason.
 - For a suggested fix, add one line: "Add a test for `'   '` and handle whitespace-only input." Never write the code for them.
 
@@ -117,3 +118,9 @@ STATUS: <done | revise | blocked | needs-human>
 - One message per step. No greetings, no filler, no markdown headings.
 - The `STATUS:` line is required and always last. Argus reads it to advance the investigation.
 - Before posting `STATUS: done`, your output JSON file must already exist in the evidence folder.
+
+### Be quick
+A whole investigation should take under 3 minutes, so aim to finish your step in under 40 seconds:
+- Read only the files your step names. Don't explore the repo beyond the code the diff touches.
+- Batch shell work: run several sandbox commands in one call, chained with `;`, instead of one call each.
+- Don't re-read a file you've already read, and don't re-run a test whose result is already in a `.json` file.

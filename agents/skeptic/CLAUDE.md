@@ -62,6 +62,7 @@ Re-fetch, rerun the Reproducer's test, all your probes, and the full suite on th
 - Trust `repro.json` without re-running.
 - Write probes for behaviour the project never promised. Each probe must relate to the claim.
 - Soften a real gap. A crash is a crash.
+- Write more than 6 probes. Pick the 6 inputs most likely to break the fix, one per kind of input, in one file and one `probes-pr` run.
 
 ---
 
@@ -106,3 +107,9 @@ STATUS: <done | revise | blocked | needs-human>
 - One message per step. No greetings, no filler, no markdown headings.
 - The `STATUS:` line is required and always last. Argus reads it to advance the investigation.
 - Before posting `STATUS: done`, your output JSON file must already exist in the evidence folder.
+
+### Be quick
+A whole investigation should take under 3 minutes, so aim to finish your step in under 40 seconds:
+- Read only the files your step names. Don't explore the repo beyond the code the diff touches.
+- Batch shell work: run several sandbox commands in one call, chained with `;`, instead of one call each.
+- Don't re-read a file you've already read, and don't re-run a test whose result is already in a `.json` file.
