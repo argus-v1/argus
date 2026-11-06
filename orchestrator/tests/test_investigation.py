@@ -160,6 +160,10 @@ class InvestigationTests(unittest.TestCase):
 
 
 class LinkTests(unittest.TestCase):
+    def test_dropping_link_lines_keeps_invisible_separators_inside_rows(self):
+        body = "| `' '` | ✔ |\n[t]({{INVESTIGATION_URL}})"
+        self.assertEqual(fill_links(body, "", REPO, 2, 1), "| `' '` | ✔ |")
+
     def test_links_filled_when_site_exists(self):
         out = fill_links("[t]({{INVESTIGATION_URL}}) · [b]({{BUNDLE_URL}})", "https://argus.dev", REPO, 2, 1)
         self.assertIn("https://argus.dev/investigations/argus-v1/datewise/2/1/bundle", out)

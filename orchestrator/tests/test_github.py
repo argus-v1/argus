@@ -25,7 +25,7 @@ class SanitizeTests(unittest.TestCase):
         row = "| Whitespace (`' '`, `' '`, `'\x85'`, `'\x1c'`) | ✔ | probes pass |"
         out = sanitize(row, [], ROOT)
         self.assertEqual(len(out.splitlines()), 1)
-        for escaped in ("\\u2028", "\\u2029", "\\x85", "\\x1c"):
+        for escaped in ("U+2028", "U+2029", "U+0085", "U+001C"):
             self.assertIn(escaped, out)
 
     def test_long_comment_is_truncated(self):

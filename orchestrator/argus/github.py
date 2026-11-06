@@ -41,10 +41,10 @@ def sanitize(text: str, secrets: list[str], root: Path) -> str:
         text = text.replace(prefix, "")
     text = re.sub(r"/(?:home|Users)/[^/\s]+/", "~/", text)
     text = re.sub(r"/tmp/argus-sbx-[A-Za-z0-9_]+/work/", "", text)
-    # Invisible line breaks and control characters (probe inputs pasted raw) break
-    # Markdown tables on GitHub; show them as escapes instead.
+    # Invisible line breaks and control characters (probe inputs pasted raw) can break
+    # Markdown tables and are unreadable anyway; write them as U+XXXX.
     text = re.sub(r"[  \x85\x00-\x08\x0b\x0c\x0e-\x1f\x7f]",
-                  lambda m: f"\\x{ord(m.group()):02x}" if ord(m.group()) < 0x100 else f"\\u{ord(m.group()):04x}", text)
+                  lambda m: f"U+{ord(m.group()):04X}", text)
     if len(text) > MAX_COMMENT:
         text = text[:MAX_COMMENT - 80] + "\n\n…truncated by Argus to fit GitHub's comment limit.\n"
     return text

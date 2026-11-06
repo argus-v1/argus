@@ -284,7 +284,9 @@ def fill_links(body: str, site_url: str, repo: str, n: int, attempt: int) -> str
     if site_url:
         base = f"{site_url}/investigations/{repo}/{n}/{attempt}"
         return body.replace("{{INVESTIGATION_URL}}", base).replace("{{BUNDLE_URL}}", base + "/bundle")
-    return "\n".join(line for line in body.splitlines() if not re.search(r"\{\{[A-Z_]+_URL\}\}", line))
+    # split("\n"), not splitlines(): splitlines() also breaks on U+2028/U+2029, which
+    # turned probe inputs pasted into a table cell into real newlines.
+    return "\n".join(line for line in body.split("\n") if not re.search(r"\{\{[A-Z_]+_URL\}\}", line))
 
 
 def _now() -> str:
