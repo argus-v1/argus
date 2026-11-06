@@ -15,7 +15,14 @@
       "Bash(git -C repo log *)",
       "Bash(git -C repo show *)",
       "Bash(git -C repo rev-parse *)",
-      "Bash(git -C repo status *)"
+      "Bash(git -C repo status *)",
+      "Bash(cat > ~/argus/shared/evidence/*)",
+      "Bash(cat ~/argus/shared/evidence/*)",
+      "Bash(ls *)",
+      "Bash(cat repo/*)",
+      "Bash(head *)",
+      "Bash(grep *)",
+      "Bash(wc *)"
     ],
     "deny": [
       "Bash(git push *)",

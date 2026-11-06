@@ -19,7 +19,14 @@
       "Bash(~/argus/bin/run_tests *)",
       "Bash(cp ~/argus/shared/evidence/* repo/tests/*)",
       "Write(repo/tests/test_argus_*)",
-      "Edit(repo/tests/test_argus_*)"
+      "Edit(repo/tests/test_argus_*)",
+      "Bash(cat > ~/argus/shared/evidence/*)",
+      "Bash(cat ~/argus/shared/evidence/*)",
+      "Bash(ls *)",
+      "Bash(cat repo/*)",
+      "Bash(head *)",
+      "Bash(grep *)",
+      "Bash(wc *)"
     ],
     "deny": [
       "Bash(git push *)",

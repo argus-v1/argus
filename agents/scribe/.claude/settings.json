@@ -8,7 +8,14 @@
       "Edit(/home/ayush/Desktop/Argus/shared/evidence/**)",
       "Write(/home/ayush/Desktop/Argus/shared/evidence/**)",
       "Bash(ls ~/argus/shared/evidence/*)",
-      "Bash(date *)"
+      "Bash(date *)",
+      "Bash(cat > ~/argus/shared/evidence/*)",
+      "Bash(cat ~/argus/shared/evidence/*)",
+      "Bash(ls *)",
+      "Bash(cat repo/*)",
+      "Bash(head *)",
+      "Bash(grep *)",
+      "Bash(wc *)"
     ],
     "deny": [
       "Bash(git push *)",
