@@ -3,3 +3,5 @@
 .impeccable/mocks/
 .impeccable/questions/
 .impeccable/hook.cache.json
+next-env.d.ts
+*.tsbuildinfo
