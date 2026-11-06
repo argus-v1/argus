@@ -80,6 +80,26 @@ class DiscordWebhookRoom:
         _request("PATCH", f"{self.url}/messages/{message_id}", {"content": text[:MAX_MESSAGE],
                                                                  "allowed_mentions": {"parse": []}}, {})
 
+    def recent(self, thread: str | None = None, limit: int = 20) -> list[dict] | None:
+        """Latest messages in the thread (or channel), newest first. None without the bot token."""
+        if not self.bot_token:
+            return None
+        if not self._channel_id:
+            self._channel_id = _request("GET", self.url, None, {})["channel_id"]
+        try:
+            return _request("GET", f"{API}/channels/{thread or self._channel_id}/messages?limit={limit}", None,
+                            {"Authorization": f"Bot {self.bot_token}"})
+        except RuntimeError:
+            return None
+
+    def post_as(self, name: str, text: str, thread: str | None = None) -> str | None:
+        """Post under another display name (used to relay an agent's own report)."""
+        saved, self.username = self.username, name
+        try:
+            return self.post(text, thread=thread)
+        finally:
+            self.username = saved
+
     def start_thread(self, message_id: str, name: str) -> str | None:
         """Open a thread under a channel message (needs the bot token). None if unavailable."""
         if not self.bot_token:

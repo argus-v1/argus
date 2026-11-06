@@ -276,6 +276,7 @@ class Investigation:
         self._wait_for(stage.outputs, started - 1, on_tick=watch_for_send_back)
         self._log_runs(stage.name, stage.role, started - 1)
         out = self._read_json(stage.outputs[-1]) if stage.outputs[-1].endswith(".json") else {}
+        self._relay(stage, out, started)
         summary = {
             "scoping": lambda o: o.get("claim") or "scope written",
             "reproducing": lambda o: f"bug reproduced: {o.get('bug_reproduced')} · PR fixes claim: {o.get('pr_fixes_claim')}",
@@ -285,6 +286,38 @@ class Investigation:
         self.log.event(self.inv_id, stage.name, stage.role, "message", summary,
                        model=self.models.get(stage.role), artifact_path=stage.outputs[-1],
                        duration_ms=int((time.time() - started) * 1000))
+
+    def _relay(self, stage: Stage, out: dict, started: float, grace: float = 8.0) -> None:
+        """If the agent's own report never reached the room (Switch refusing its post), post
+        its words for it, labelled as relayed. Needs the bot token to read the room."""
+        message = out.get("room_message")
+        recent_fn = getattr(self.room, "recent", None)
+        if not message or not recent_fn:
+            return
+
+        def posted_by_agent() -> bool | None:
+            msgs = recent_fn(self.thread)
+            if msgs is None:
+                return None
+            for m in msgs:
+                author = (m.get("author") or {}).get("username", "").lower()
+                text = m.get("content") or ""
+                if author.startswith(stage.role) and "via Argus" not in author \
+                        and ("STATUS:" in text or f"PR #{self.n}" in text):
+                    return True
+            return False
+
+        deadline = time.monotonic() + grace
+        while True:
+            seen = posted_by_agent()
+            if seen is None or seen:
+                return
+            if time.monotonic() > deadline:
+                break
+            time.sleep(min(2.0, self.poll * 2))
+        self.room.post_as(f"{stage.role} (via Argus)", str(message), thread=self.thread)
+        self.log.event(self.inv_id, stage.name, "orchestrator", "message",
+                       f"relayed {stage.role}'s report (its own post didn't reach the room)")
 
     def _verdict(self, meta: dict) -> str:
         self.checkpoint()

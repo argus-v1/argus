@@ -158,6 +158,37 @@ class InvestigationTests(unittest.TestCase):
         self.assertEqual(room2.opened, [])
         self.assertIn("✔ Verified", room2.edits[-1][1])
 
+    def test_report_is_relayed_only_when_the_agent_could_not_post(self):
+        class RelayRoom(AgentRoom):
+            agent_posts = False                                # Switch refusing agents' posts
+
+            def act(self, role):
+                super().act(role)
+                if role == "triager":                          # agents also save their message
+                    self.write("scope.json", {"claim": "c", "room_message": "🧭 TRIAGER · PR #2 · scoping\nclaim\nSTATUS: done"})
+
+            def recent(self, thread=None, limit=20):
+                if self.agent_posts:
+                    return [{"author": {"username": "triager"}, "content": "🧭 TRIAGER · PR #2 · scoping\nSTATUS: done"}]
+                return []
+
+            def post_as(self, name, text, thread=None):
+                self.relayed = (name, text)
+                return "relay"
+
+        room = RelayRoom(self.ev, 2)
+        inv = self.investigate(room)
+        inv.poll = 0.01
+        stage = __import__("argus.investigation", fromlist=["STAGES"]).STAGES[0]
+        (self.ev / "scope.json").write_text(json.dumps({"room_message": "🧭 TRIAGER · PR #2 · scoping\nSTATUS: done"}))
+        inv._relay(stage, json.loads((self.ev / "scope.json").read_text()), time.time(), grace=0.05)
+        self.assertEqual(room.relayed[0], "triager (via Argus)")
+        room2 = RelayRoom(self.ev, 2)
+        room2.agent_posts = True
+        inv2 = self.investigate(room2)
+        inv2._relay(stage, {"room_message": "x"}, time.time(), grace=0.05)
+        self.assertFalse(hasattr(room2, "relayed"))           # the agent's own post is there: stay quiet
+
     def test_silent_agent_times_out_cleanly(self):
         room = AgentRoom(self.ev, 2, silent={"skeptic"})
         result = self.investigate(room, timeout=0.5).run()

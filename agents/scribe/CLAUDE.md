@@ -120,6 +120,7 @@ STATUS: <done | revise | blocked | needs-human>
 - Before posting `STATUS: done`, your output JSON file must already exist in the evidence folder.
 - If a Switch call fails with `Not connected to a room`, call `connect_to_room` with the room you were addressed in (find the `pr-review` room with `list_rooms`), then post again. Never finish your step without your message posted.
 - Write files with your file-writing tool, not shell redirection such as `cat > file <<EOF`.
+- Also save your room message, exactly as you post it, in your output JSON as `"room_message"` (for the Scribe: in `verdict.json`). If Switch won't let you post, Argus relays it from there.
 
 ### Be quick
 A whole investigation should take under 3 minutes, so aim to finish your step in under 40 seconds:
