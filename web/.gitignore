@@ -5,3 +5,5 @@
 .impeccable/hook.cache.json
 next-env.d.ts
 *.tsbuildinfo
+.vercel
+.env*

@@ -1,0 +1,7 @@
+.env*
+.impeccable
+design
+node_modules
+.next
+CLAUDE.md
+PRODUCT.md
