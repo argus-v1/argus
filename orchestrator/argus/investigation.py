@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .eventlog import EventLog
-from .github import STATUS_LABELS, GitHubApp
+from .github import STATUS_LABELS, GitHubApp, sanitize
 from .room import Room, banner
 from .webhook import Job
 
@@ -153,10 +153,27 @@ class Investigation:
             run = self._read_json(path.name)
             if "outcome" not in run or "label" not in run:
                 continue
+            data = {k: run.get(k) for k in ("label", "ref", "sha", "test", "outcome", "summary")}
+            data.update(self._run_extras(run))
             self.log.event(self.inv_id, stage, role, "test_run",
                            f"{run.get('command', 'pytest')} @ {run.get('ref')} -> {str(run['outcome']).upper()}",
-                           artifact_path=path.name, duration_ms=run.get("duration_ms"),
-                           data={k: run.get(k) for k in ("label", "ref", "sha", "test", "outcome", "summary")})
+                           artifact_path=path.name, duration_ms=run.get("duration_ms"), data=data)
+
+    def _run_extras(self, run: dict) -> dict:
+        """For the public site's "verify it yourself" page: the agent-written test file the
+        run used (content) and the end of its log (log_tail), cleaned like a GitHub comment."""
+        clean = lambda text: sanitize(text, getattr(self.gh, "secrets", []), getattr(self.gh, "root", self.dir))
+        extras: dict = {}
+        tests = [Path(d).name for d in run.get("added_files") or [] if Path(d).name.startswith("test_argus_")]
+        if not tests and str(run.get("test", "")).split("::")[0].rsplit("/", 1)[-1].startswith("test_argus_"):
+            tests = [str(run["test"]).split("::")[0].rsplit("/", 1)[-1]]
+        if tests and (self.dir / tests[0]).is_file():
+            extras["content"] = clean((self.dir / tests[0]).read_text(errors="replace")[:20000])
+            extras["test_file"] = tests[0]
+        log = self.dir / str(run.get("log") or "")
+        if run.get("log") and log.is_file():
+            extras["log_tail"] = clean("\n".join(log.read_text(errors="replace").splitlines()[-20:]))
+        return extras
 
     # -- setup -----------------------------------------------------------------
     def _prefetch(self) -> None:

@@ -77,7 +77,10 @@ class AgentRoom:
         if role == "triager":
             self.write("scope.json", {"claim": "parse_date('') raises IndexError", "trigger": "parse_date('')"})
         elif role == "reproducer":
-            self.write("repro-main.json", {"label": "repro-main", "ref": "main", "outcome": "failed",
+            self.write(f"test_argus_{n}.py", "def test_empty():\n    assert True\n")
+            self.write("repro-main.log", "\n".join(f"line {i}" for i in range(30)) + "\nE   IndexError at /home/ayush/Desktop/Argus/x.py")
+            self.write("repro-main.json", {"label": "repro-main", "ref": "main", "outcome": "failed", "log": "repro-main.log",
+                                           "added_files": [f"tests/test_argus_{n}.py"], "test": f"tests/test_argus_{n}.py",
                                            "command": f"pytest tests/test_argus_{n}.py", "duration_ms": 900})
             self.write("repro.json", {"bug_reproduced": True, "pr_fixes_claim": True})
         elif role == "skeptic":
@@ -130,6 +133,10 @@ class InvestigationTests(unittest.TestCase):
         kinds = [(e.get("role"), e.get("kind")) for e in self.events() if "kind" in e]
         self.assertIn(("reproducer", "test_run"), kinds)
         self.assertIn(("skeptic", "test_run"), kinds)
+        run = next(e for e in self.events() if e.get("kind") == "test_run" and e["data"].get("label") == "repro-main")
+        self.assertIn("def test_empty", run["data"]["content"])          # for the site's bundle page
+        self.assertEqual(len(run["data"]["log_tail"].splitlines()), 20)
+        self.assertNotIn("/home/ayush", run["data"]["log_tail"])          # public: cleaned like a comment
 
     def test_push_reverifies_from_reproducing_and_archives(self):
         self.investigate(AgentRoom(self.ev, 2)).run()
