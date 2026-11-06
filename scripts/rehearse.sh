@@ -17,9 +17,13 @@ DEMO="$ROOT/demo/datewise"
 PATCHES="$ROOT/scripts/contributor"
 
 worktree_for() {  # worktree_for <branch> <base>: fresh temporary checkout
-  local dir; dir="$(mktemp -d)"
+  # Keep the checkout next to the demo repo, not in $TMPDIR: on this machine TMPDIR
+  # can sit on a drive without Unix permissions, which made every file look
+  # executable and put "file mode 100644 -> 100755" changes into rehearsal commits.
+  local dir; dir="$(mktemp -d -p "$(dirname "$DEMO")" .rehearsal-XXXXXX)"
   git -C "$DEMO" fetch -q origin
   git -C "$DEMO" worktree add -q -B "$1" "$dir" "$2"
+  git -C "$dir" config core.fileMode false   # never commit permission flips, wherever it lives
   echo "$dir"
 }
 
