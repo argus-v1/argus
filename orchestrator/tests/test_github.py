@@ -21,6 +21,13 @@ class SanitizeTests(unittest.TestCase):
         self.assertIn("shared/evidence/pr-2/repro-main.log", out)
         self.assertNotIn("/home/ayush", out)
 
+    def test_invisible_line_breaks_cannot_split_a_table_row(self):
+        row = "| Whitespace (`' '`, `' '`, `'\x85'`, `'\x1c'`) | ✔ | probes pass |"
+        out = sanitize(row, [], ROOT)
+        self.assertEqual(len(out.splitlines()), 1)
+        for escaped in ("\\u2028", "\\u2029", "\\x85", "\\x1c"):
+            self.assertIn(escaped, out)
+
     def test_long_comment_is_truncated(self):
         out = sanitize("x" * 70000, [], ROOT)
         self.assertLess(len(out), 65536)
