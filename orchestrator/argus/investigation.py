@@ -196,7 +196,8 @@ class Investigation:
             raise Cancelled()
         self.dir.mkdir(parents=True, exist_ok=True)
         previous = self._state().get("attempt", 0)
-        self.attempt = previous + 1
+        max_logged = getattr(self.log, "max_attempt", lambda *_: 0)(repo, self.n)
+        self.attempt = max(previous, max_logged) + 1
         if previous:
             archive = self.dir / f"attempt-{previous}"
             archive.mkdir(exist_ok=True)

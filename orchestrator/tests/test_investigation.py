@@ -202,6 +202,12 @@ class InvestigationTests(unittest.TestCase):
         inv2._relay(stage, {"room_message": "x"}, time.time(), grace=0.05)
         self.assertFalse(hasattr(room2, "relayed"))           # the agent's own post is there: stay quiet
 
+    def test_attempt_number_never_reused_after_evidence_is_wiped(self):
+        self.log.max_attempt = lambda repo, n: 2          # the database already has attempts 1 and 2
+        inv = self.investigate(AgentRoom(self.ev, 2))
+        inv.run()
+        self.assertEqual(inv.attempt, 3)
+
     def test_silent_agent_times_out_cleanly(self):
         room = AgentRoom(self.ev, 2, silent={"skeptic"})
         result = self.investigate(room, timeout=0.5).run()

@@ -48,6 +48,22 @@ class EventLog:
             with self.local.open("a") as fh:
                 fh.write(json.dumps(record) + "\n")
 
+    def max_attempt(self, repo: str, pr_number: int) -> int:
+        """Highest attempt already logged for this PR (0 if none or unreachable). The database, not the
+        evidence folder, is the source of truth: a wiped folder must not reuse an attempt number."""
+        if not (self.base and self.key):
+            return 0
+        req = urllib.request.Request(
+            f"{self.base}/investigations?select=attempt&repo=eq.{repo}&pr_number=eq.{pr_number}"
+            "&order=attempt.desc&limit=1",
+            headers={"apikey": self.key, "Authorization": f"Bearer {self.key}"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                rows = json.load(resp)
+            return int(rows[0]["attempt"]) if rows else 0
+        except Exception:
+            return 0
+
     def start(self, **fields) -> str:
         inv_id = str(uuid.uuid4())
         self._write("POST", "/investigations", {"id": inv_id, **fields})
