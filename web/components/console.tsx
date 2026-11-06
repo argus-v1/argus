@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Icon, ROLE_VAR } from "./Icons";
-import { durationMs, fmtAgo, fmtDuration, investigationHref, STATE_WORDS, stateOf, type State } from "@/lib/derive";
-import { STAGES, STAGE_ROLE, type Investigation } from "@/lib/types";
+import { Icon, ROLE_ICON, ROLE_VAR } from "./Icons";
+import { durationMs, fmtAgo, fmtDuration, investigationHref, ROLE_NAME, stageDurations, STATE_WORDS, stateOf, type State } from "@/lib/derive";
+import { STAGES, STAGE_ROLE, type Event, type Investigation } from "@/lib/types";
 
 const STATE_ICON: Record<State, string> = {
   verified: "i-ok",
@@ -88,6 +88,27 @@ export function LoadError({ what, message }: { what: string; message: string }) 
     <div className="empty" role="alert">
       <h3>Couldn&apos;t load {what}</h3>
       <p>The event log did not answer ({message}). Refresh in a moment; nothing on this page is lost.</p>
+    </div>
+  );
+}
+
+/** The five stages in a ruled row: who owns each, and how long it took (or that it is working). */
+export function StageRail({ inv, events, style }: { inv: Investigation; events: Event[]; style?: React.CSSProperties }) {
+  const durs = stageDurations(events);
+  const at = STAGES.indexOf(inv.stage);
+  return (
+    <div className="stages" aria-label="Stages" style={style}>
+      {STAGES.map((s, i) => {
+        const role = STAGE_ROLE[s];
+        const cls = inv.status === "done" || i < at ? "done" : i === at && inv.status === "running" ? "now" : i === at ? "done" : "pending";
+        return (
+          <div key={s} className={`stg ${cls}`} style={{ "--c": ROLE_VAR[role] } as React.CSSProperties}>
+            <div className="r"><Icon id={ROLE_ICON[role]} size={13} /><span>{ROLE_NAME[role]}</span></div>
+            <div className="s">{s[0].toUpperCase() + s.slice(1)}</div>
+            <div className="d">{durs[s] != null ? fmtDuration(durs[s]) : cls === "now" ? "working…" : cls === "pending" ? "waiting" : s === "scoping" && inv.attempt > 1 ? "from attempt 1" : "–"}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

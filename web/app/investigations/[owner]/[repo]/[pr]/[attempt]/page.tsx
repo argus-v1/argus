@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LoadError, Pair, StateBadge } from "@/components/console";
+import { LoadError, Pair, StageRail, StateBadge } from "@/components/console";
 import { Icon, ROLE_ICON, ROLE_VAR } from "@/components/Icons";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import {
@@ -104,19 +104,7 @@ export default async function InvestigationPage({ params }: { params: Promise<Pa
       </section>
       <div className="wrap">
 
-        <div className="stages" aria-label="Stages" style={{ marginTop: 32 }}>
-          {STAGES.map((s, i) => {
-            const role = STAGE_ROLE[s];
-            const cls = inv.status === "done" || i < at ? "done" : i === at && inv.status === "running" ? "now" : i === at ? "done" : "pending";
-            return (
-              <div key={s} className={`stg ${cls}`} style={v(ROLE_VAR[role])}>
-                <div className="r"><Icon id={ROLE_ICON[role]} size={13} /><span>{ROLE_NAME[role]}</span></div>
-                <div className="s">{s[0].toUpperCase() + s.slice(1)}</div>
-                <div className="d">{durs[s] != null ? fmtDuration(durs[s]) : cls === "now" ? "working…" : cls === "pending" ? "waiting" : "–"}</div>
-              </div>
-            );
-          })}
-        </div>
+        <StageRail inv={inv} events={events} style={{ marginTop: 32 }} />
 
         <div className="igrid">
           <section aria-label="Timeline">

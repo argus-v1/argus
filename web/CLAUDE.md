@@ -5,7 +5,7 @@ Next.js 16 (App Router) + Supabase, deployed on Vercel. Public and **read-only**
 approvals, agent chat, settings or any write path here.
 
 ## Run
-- Live: https://argus-alpha-sand.vercel.app (Vercel project `argus`, team ayush-org). Redeploy: `cd web && npx vercel deploy --prod --yes`.
+- Live: https://argus-alpha-sand.vercel.app (Vercel project `argus`, team ayush-org, Root Directory `web`). Deploys on every push to `main` of argus-v1/argus.
 - `npm run dev` / `npm run build` / `npx tsc --noEmit`
 - Env (`web/.env.local`, git-ignored; set the same on Vercel): `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_GITHUB_APP_SLUG` (argus-v1).

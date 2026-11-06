@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InvestigationsTable, LoadError, StageBar, StateBadge } from "@/components/console";
-import { EyeField } from "@/components/EyeField";
+import { NowWatching } from "@/components/NowWatching";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { PageHero } from "@/components/PageHero";
 import { durationMs, fmtAgo, fmtDuration, investigationHref, latestPerPr, median, ROLE_NAME, stateOf, type State } from "@/lib/derive";
 import { INSTALL_URL } from "@/lib/site";
-import { listInvestigations } from "@/lib/supabase";
+import { getEvents, listInvestigations } from "@/lib/supabase";
 import { STAGE_ROLE, type Investigation } from "@/lib/types";
 import "../console.css";
 
@@ -36,6 +36,8 @@ export default async function Console({ searchParams }: { searchParams: Promise<
   const prs = latestPerPr(rows);
   const running = rows.filter((r) => r.status === "running");
   const finished = rows.filter((r) => r.status === "done" && r.finished_at);
+  const focus = running[0] ?? rows[0];
+  const focusEvents = focus ? await getEvents([focus.id]).catch(() => []) : [];
   const verifiedPrs = prs.filter((r) => r.verdict === "verified").length;
   const sentBack = rows.filter((r) => r.verdict === "changes-needed" || r.verdict === "not-reproduced").length;
   const medianMs = median(finished.map((r) => durationMs(r, now)!).filter((x) => x != null));
@@ -52,17 +54,11 @@ export default async function Console({ searchParams }: { searchParams: Promise<
       <div className="wrap">
         <div className="lift">
           <div className="frame">
-            <div className="eyes-head">
-              <h2><b>{Math.min(all.length, 100)}</b> of 100 eyes open</h2>
-              <p>One eye per run, oldest first. Hover one to see which pull request it watched.</p>
-            </div>
-            <EyeField rows={all} />
-            <div className="eye-legend">
-              <span><i style={{ background: "var(--ok)" }} />Verified</span>
-              <span><i style={{ background: "var(--bad)" }} />Changes needed or not reproduced</span>
-              <span><i style={{ background: "var(--amb)" }} />Checking now, or needs a maintainer</span>
-              <span><i style={{ background: "var(--faint)" }} />Stopped</span>
-            </div>
+            {focus ? (
+              <NowWatching inv={focus} events={focusEvents} now={now} />
+            ) : (
+              <div className="empty"><h3>Waiting for the first pull request</h3><p>Add the <span className="mono">argus</span> label to a pull request and it appears here, live.</p></div>
+            )}
           </div>
         </div>
 
