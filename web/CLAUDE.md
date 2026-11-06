@@ -5,6 +5,7 @@ Next.js 16 (App Router) + Supabase, deployed on Vercel. Public and **read-only**
 approvals, agent chat, settings or any write path here.
 
 ## Run
+- Live: https://argus-alpha-sand.vercel.app (Vercel project `argus`, team ayush-org). Redeploy: `cd web && npx vercel deploy --prod --yes`.
 - `npm run dev` / `npm run build` / `npx tsc --noEmit`
 - Env (`web/.env.local`, git-ignored; set the same on Vercel): `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_GITHUB_APP_SLUG` (argus-v1).
@@ -24,6 +25,6 @@ approvals, agent chat, settings or any write path here.
   check for collisions across the three files before adding one.
 
 ## Data the site wishes it had (requests to the orchestrator owner, argus-c7)
-1. `ARGUS_SITE_URL` set to the deployed site, so the Scribe comment's timeline/bundle links are filled.
+1. Done 2026-11-06: `ARGUS_SITE_URL=https://argus-alpha-sand.vercel.app` added to the root `.env`; the orchestrator picks it up on its next restart.
 2. On each `test_run` event, add to `data`: `content` (the test file, for `test_argus_*` files) and
    `log_tail` (last 20 lines of the run's .log). No schema change; the bundle page already renders `content`.
