@@ -71,10 +71,35 @@ class Investigation:
         self.dir = evidence_root / f"pr-{self.n}"
         self.inv_id = ""
         self.attempt = 1
+        self.title = ""
+        self.thread: str | None = None   # Discord thread for this PR, when threads are on
+        self.header: str | None = None   # the PR's status line in the channel
 
     # -- helpers ---------------------------------------------------------------
     def say(self, text: str) -> None:
-        self.room.post(text)
+        self.room.post(text, thread=self.thread)
+
+    def status(self, text: str) -> None:
+        """Update the PR's one-line status in the channel (thread mode only)."""
+        if self.header:
+            try:
+                self.room.edit(self.header, f"🔎 **PR #{self.n}** · {self.title[:80]} · {text}")
+            except Exception:
+                pass  # a stale status line must never stop the run
+
+    def _open_thread(self, meta: dict) -> None:
+        if not getattr(self.room, "threads", False):
+            return
+        state = self._state()
+        if state.get("thread_id") and state.get("header_id"):
+            self.thread, self.header = state["thread_id"], state["header_id"]
+            return
+        self.header = self.room.post(f"🔎 **PR #{self.n}** · {self.title[:80]} · by {meta['author']} · starting…")
+        self.thread = self.room.start_thread(self.header, f"PR #{self.n} · {self.title}") if self.header else None
+        if not self.thread:   # no permission to open threads: keep everything in the channel
+            self.header = None
+            return
+        self._save_state(thread_id=self.thread, header_id=self.header)
 
     def checkpoint(self) -> None:
         if self.cancel.is_set():
@@ -180,6 +205,8 @@ class Investigation:
             reproducer_model=self.models.get("reproducer"), skeptic_model=self.models.get("skeptic"))
         self.gh.set_status(repo, n, "verifying")
         self.log.event(self.inv_id, stages[0].name, "orchestrator", "label", "label: verifying")
+        self.title = meta["title"]
+        self._open_thread(meta)
         if self.attempt > 1:
             self.say(f"🔁 New push to PR #{n} (`{meta['head_sha'][:7]}`). Re-verifying, attempt {self.attempt}.")
 
@@ -193,6 +220,7 @@ class Investigation:
             self._save_state(status="cancelled")
             return "cancelled"
         except StageTimeout as exc:
+            self.status(f"⏸ stopped, waiting on {exc}")
             self.say(f"⏸ PR #{n} is waiting on {exc}. The investigation stopped; a maintainer can re-add the "
                      f"`argus` label to start again.")
             self.log.event(self.inv_id, self._current, "orchestrator", "error", f"timed out waiting for {exc}")
@@ -209,13 +237,13 @@ class Investigation:
         started = time.time()
         self.log.update(self.inv_id, stage=stage.name)
         title = banner(stage.name, n)
-        self.say(title)
         self.log.event(self.inv_id, stage.name, "orchestrator", "banner", title)
         ask = stage.ask.format(n=n, ev=EVIDENCE_IN_PROMPT.format(n=n))
         if self.attempt > 1:
             ask += (f" This is re-verification attempt {self.attempt} on the new head "
                     f"`{meta['head_sha'][:7]}`: re-fetch the PR and use -v{self.attempt} labels.")
-        self.say(ask)
+        self.status(f"{title.split(' · PR')[0]} · {stage.role} working…")
+        self.say(f"{title}\n{ask}")   # banner and hand-off in one message
 
         nudged = {"done": False}
 
@@ -272,6 +300,7 @@ class Investigation:
                  "not-reproduced": "✘ Not reproduced", "needs-human": "✋ Needs a maintainer"}[value]
         reason = verdict.get("reason", "")
         self.say(f"■ Stage 5/5 · Verdict · PR #{n} · {words}" + (f" · {reason}" if reason else "") + f"\n{url}")
+        self.status(f"{words} · attempt {self.attempt} · {url}")
         self.log.event(self.inv_id, "verdict", "orchestrator", "banner", f"Verdict: {words}")
         self.log.update(self.inv_id, stage="verdict", status="done", comment_url=url, finished_at=_now(),
                         verdict=value)

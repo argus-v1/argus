@@ -29,7 +29,8 @@ def main() -> None:
 
     secrets = [v for k, v in env.items() if any(s in k for s in SECRET_KEYS) and v]
     gh = GitHubApp(cfg.app_id, cfg.private_key, secrets, ROOT)
-    room = DiscordWebhookRoom(env.get("DISCORD_WEBHOOK_URL", ""), avatar_url=env.get("ARGUS_AVATAR_URL") or None)
+    room = DiscordWebhookRoom(env.get("DISCORD_WEBHOOK_URL", ""), avatar_url=env.get("ARGUS_AVATAR_URL") or None,
+                              bot_token=env.get("DISCORD_BOT_TOKEN", ""))
     log = EventLog(cfg.supabase_url, cfg.supabase_service_key, LOGS / "events.jsonl")
     models = {"triager": env.get("ARGUS_TRIAGER_MODEL", "Claude"),
               "reproducer": env.get("ARGUS_REPRODUCER_MODEL", "Codex"),

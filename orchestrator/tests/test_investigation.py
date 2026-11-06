@@ -42,15 +42,31 @@ class FakeGitHub:
 class AgentRoom:
     """Plays the four agents: a mention makes that agent write its outputs."""
 
-    def __init__(self, ev: Path, n: int, verdict="changes-needed", silent=()):
+    def __init__(self, ev: Path, n: int, verdict="changes-needed", silent=(), threads=False):
         self.ev, self.n, self.verdict, self.silent = ev, n, verdict, set(silent)
+        self.threads = threads
         self.posts: list[str] = []
+        self.where: list[str | None] = []
+        self.edits: list[tuple[str, str]] = []
+        self.opened: list[tuple[str, str]] = []
 
-    def post(self, text):
+    def post(self, text, thread=None):
         self.posts.append(text)
-        role = text.split()[0][1:] if text.startswith("@") else None
-        if role and role not in self.silent:
-            threading.Timer(0.05, self.act, args=(role,)).start()
+        self.where.append(thread)
+        for line in text.split("\n"):
+            if line.startswith("@") and line.split()[0][1:] not in self.silent:
+                threading.Timer(0.05, self.act, args=(line.split()[0][1:],)).start()
+        return f"msg-{len(self.posts)}"
+
+    def edit(self, message_id, text):
+        self.edits.append((message_id, text))
+
+    def start_thread(self, message_id, name):
+        self.opened.append((message_id, name))
+        return "thread-1"
+
+    def mentions(self):
+        return [line.split()[0] for p in self.posts for line in p.split("\n") if line.startswith("@")]
 
     def write(self, name, data):
         path = self.ev / name
@@ -106,8 +122,9 @@ class InvestigationTests(unittest.TestCase):
         self.assertIn("<!-- argus:pr=2 attempt=1", comment)
         banners = [p for p in room.posts if p.startswith(("▶", "■"))]
         self.assertEqual(len(banners), 5)
-        mentions = [p.split()[0] for p in room.posts if p.startswith("@")]
-        self.assertEqual(mentions, ["@triager", "@reproducer", "@skeptic", "@scribe"])
+        self.assertEqual(len(room.posts), 5)                  # banner and hand-off share one message
+        self.assertEqual(room.mentions(), ["@triager", "@reproducer", "@skeptic", "@scribe"])
+        self.assertEqual(set(room.where), {None})             # no bot token: everything in the channel
         pr = json.loads((self.ev / "pr.json").read_text())
         self.assertEqual((pr["number"], pr["linked_issue"]["number"], pr["attempt"]), (2, 1, 1))
         kinds = [(e.get("role"), e.get("kind")) for e in self.events() if "kind" in e]
@@ -121,10 +138,25 @@ class InvestigationTests(unittest.TestCase):
         result = self.investigate(room, trigger="push").run()
         self.assertEqual(result, "verified")
         self.assertTrue((self.ev / "attempt-1" / "verdict.json").exists())
-        mentions = [p.split()[0] for p in room.posts if p.startswith("@")]
-        self.assertEqual(mentions, ["@reproducer", "@skeptic", "@scribe"])   # scope reused
+        self.assertEqual(room.mentions(), ["@reproducer", "@skeptic", "@scribe"])   # scope reused
         self.assertTrue(any("-v2 labels" in p for p in room.posts))
         self.assertEqual(self.gh.labels[-1], "verified")
+
+    def test_thread_mode_keeps_the_channel_to_one_status_line(self):
+        room = AgentRoom(self.ev, 2, threads=True)
+        self.investigate(room).run()
+        self.assertEqual(room.where[0], None)                 # the status line, in the channel
+        self.assertEqual(set(room.where[1:]), {"thread-1"})   # everything else in the PR's thread
+        self.assertEqual(room.opened[0][0], "msg-1")
+        self.assertIn("Stage 3/5", " ".join(t for _, t in room.edits))
+        self.assertIn("✘ Changes needed", room.edits[-1][1])
+        # a push re-uses the same thread and status line
+        self.gh.head = "db42766" + "0" * 33
+        room2 = AgentRoom(self.ev, 2, verdict="verified", threads=True)
+        self.investigate(room2, trigger="push").run()
+        self.assertEqual(set(room2.where), {"thread-1"})
+        self.assertEqual(room2.opened, [])
+        self.assertIn("✔ Verified", room2.edits[-1][1])
 
     def test_silent_agent_times_out_cleanly(self):
         room = AgentRoom(self.ev, 2, silent={"skeptic"})
