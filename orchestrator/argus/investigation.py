@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import threading
 import time
 from dataclasses import dataclass
@@ -62,11 +63,12 @@ class StageTimeout(Exception):
 class Investigation:
     def __init__(self, job: Job, gh: GitHubApp, room: Room, log: EventLog, evidence_root: Path,
                  cancel: threading.Event, *, models: dict[str, str], site_url: str = "",
-                 stage_timeout: float = 600, poll: float = 1.0):
+                 stage_timeout: float = 600, poll: float = 1.0, clones: tuple[Path, ...] = ()):
         self.job, self.gh, self.room, self.log = job, gh, room, log
         self.cancel = cancel
         self.models, self.site_url = models, site_url.rstrip("/")
         self.stage_timeout, self.poll = stage_timeout, poll
+        self.clones = clones
         self.n = job.pr_number
         self.dir = evidence_root / f"pr-{self.n}"
         self.inv_id = ""
@@ -157,6 +159,19 @@ class Investigation:
                            data={k: run.get(k) for k in ("label", "ref", "sha", "test", "outcome", "summary")})
 
     # -- setup -----------------------------------------------------------------
+    def _prefetch(self) -> None:
+        """Fetch main and the PR head into every agent clone, so agents need no network
+        (Codex's sandbox blocks it) and each stage starts sooner. Best effort."""
+        def fetch(repo: Path) -> None:
+            subprocess.run(["git", "-C", str(repo), "fetch", "-q", "origin", "+main:refs/remotes/origin/main",
+                            f"+refs/pull/{self.n}/head:refs/heads/pr-{self.n}"],
+                           capture_output=True, timeout=60)
+        threads = [threading.Thread(target=fetch, args=(c,)) for c in self.clones if (c / ".git").exists()]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
     def _prepare(self) -> tuple[dict, list[Stage]]:
         repo = self.job.repo
         pr = self.gh.pull(repo, self.n)
@@ -186,6 +201,7 @@ class Investigation:
         }
         (self.dir / "pr.json").write_text(json.dumps(meta, indent=2) + "\n")
         (self.dir / "pr.diff").write_text(self.gh.diff(repo, self.n))
+        self._prefetch()
         self._save_state(attempt=self.attempt, head_sha=meta["head_sha"], status="running")
 
         start = 0 if self.attempt == 1 or not (self.dir / "scope.json").exists() else 1

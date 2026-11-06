@@ -41,7 +41,8 @@ def main() -> None:
 
     def make(job: Job, cancel: threading.Event) -> Investigation:
         return Investigation(job, gh, room, log, EVIDENCE, cancel, models=models,
-                             site_url=env.get("ARGUS_SITE_URL", ""), stage_timeout=args.stage_timeout)
+                             site_url=env.get("ARGUS_SITE_URL", ""), stage_timeout=args.stage_timeout,
+                             clones=tuple(ROOT / "agents" / r / "repo" for r in ("triager", "reproducer", "skeptic")))
 
     orchestrator = Orchestrator(make, log_fn=lambda msg: receiver.log(kind="investigation", result=msg))
 
