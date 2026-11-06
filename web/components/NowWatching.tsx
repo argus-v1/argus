@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { StageRail, StateBadge } from "./console";
 import { Icon, ROLE_ICON, ROLE_VAR } from "./Icons";
-import { durationMs, fmtAgo, fmtDuration, investigationHref, ROLE_NAME, stateOf } from "@/lib/derive";
+import { durationMs, fmtAgo, fmtDuration, investigationHref, isRelayNote, ROLE_NAME, stateOf } from "@/lib/derive";
 import type { Event, Investigation } from "@/lib/types";
 
 /** The run in progress (or the latest one), big: its stages and its last few steps, updating live. */
 export function NowWatching({ inv, events, now }: { inv: Investigation; events: Event[]; now: number }) {
   const live = inv.status === "running";
-  const steps = events.filter((e) => e.kind !== "banner").slice(-5).reverse();
+  const steps = events.filter((e) => e.kind !== "banner" && !isRelayNote(e)).slice(-5).reverse();
   return (
     <div className="watch">
       <div className="watch-top">

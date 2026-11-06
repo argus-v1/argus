@@ -250,3 +250,12 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .ghlog li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 18px; font-size: 14px; }
 .ghlog li time { font: 400 12px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; }
 .ghlog .lb { font: 500 12px var(--mono); border-radius: 999px; padding: 1px 9px; border: 1px solid var(--line-strong); }
+
+/* log tails and agent-written files */
+.logtail { grid-column: 1 / -1; margin-top: 6px; }
+.logtail summary { cursor: pointer; font: 400 12px var(--mono); color: var(--muted); padding: 4px 0; }
+.logtail summary:hover { color: var(--text); }
+.logtail pre { margin: 6px 0 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font: 400 12px/1.6 var(--mono); color: var(--muted); overflow-x: auto; white-space: pre; max-height: 320px; }
+.steps-v .logtail { margin-top: 10px; }
+.fname { font: 500 12.5px var(--mono); color: var(--muted); margin-bottom: 6px; }
+.tev.relay .txt { font: 400 12.5px var(--mono); color: var(--faint); }

@@ -100,3 +100,7 @@ export function skepticFindings(events: Event[]): string[] {
     .map((s) => s.trim())
     .filter((s) => s && s !== "none");
 }
+
+/** The orchestrator's note that it relayed an agent's report into the room (Switch refused the agent's post). */
+export const isRelayNote = (e: Pick<Event, "role" | "kind" | "message">) =>
+  e.role === "orchestrator" && e.kind === "message" && /^relayed /i.test(e.message);

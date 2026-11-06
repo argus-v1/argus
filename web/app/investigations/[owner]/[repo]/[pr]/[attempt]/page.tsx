@@ -5,7 +5,7 @@ import { LoadError, Pair, StageRail, StateBadge } from "@/components/console";
 import { Icon, ROLE_ICON, ROLE_VAR } from "@/components/Icons";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import {
-  durationMs, fmtDuration, fmtTime, investigationHref, ROLE_NAME, short, skepticCaught, skepticFindings, stageDurations, stateOf,
+  durationMs, fmtDuration, fmtTime, investigationHref, isRelayNote, ROLE_NAME, short, skepticCaught, skepticFindings, stageDurations, stateOf,
 } from "@/lib/derive";
 import { getAttempts, getEvents } from "@/lib/supabase";
 import { AGENTS, STAGES, STAGE_ROLE, type Event, type Investigation } from "@/lib/types";
@@ -139,6 +139,12 @@ export default async function InvestigationPage({ params }: { params: Promise<Pa
                       <Outcome o={e.data.outcome} />
                       <span className="sub">{e.data.test} @ {e.data.ref} {short(e.data.sha)} · {fmtDuration(e.duration_ms)}</span>
                       {e.data.summary && <span className="sum">{e.data.summary}</span>}
+                      {e.data.log_tail && (
+                        <details className="logtail">
+                          <summary>Last lines of the log</summary>
+                          <pre>{e.data.log_tail}</pre>
+                        </details>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -217,7 +223,7 @@ function TimelineItem({ e }: { e: Event }) {
       </li>
     );
   }
-  const kindCls = e.kind === "test_run" ? " run" : e.kind === "error" ? " err" : "";
+  const kindCls = e.kind === "test_run" ? " run" : e.kind === "error" ? " err" : isRelayNote(e) ? " relay" : "";
   return (
     <li className={`tev${kindCls}`} style={v(e.kind === "error" ? "var(--bad)" : color)}>
       <span className="dot"><Icon id={e.kind === "error" ? "i-no" : ROLE_ICON[e.role]} size={15} /></span>

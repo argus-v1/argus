@@ -35,9 +35,10 @@ export type TestRunData = {
   test?: string;
   outcome?: "passed" | "failed" | "error";
   summary?: string;
-  // Optional, if the orchestrator starts attaching evidence (see web/CLAUDE.md):
-  content?: string; // the test file
-  log_tail?: string; // last lines of the run's log
+  // Attached by the orchestrator from 2026-11-06 (b89d903); older events lack them.
+  content?: string; // text of the agent-written test_argus_* file the run used
+  test_file?: string; // that file's name
+  log_tail?: string; // last 20 lines of the run's log (sanitized)
 };
 
 export type Event = {

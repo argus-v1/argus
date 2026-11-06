@@ -18,6 +18,15 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   return { title: `Verify ${p.owner}/${p.repo} #${p.pr}` };
 }
 
+function FileBox({ text }: { text: string }) {
+  return (
+    <div className="cmdbox">
+      <pre>{text}</pre>
+      <CopyButton text={text} label="Copy file" />
+    </div>
+  );
+}
+
 function Cmd({ lines }: { lines: string[] }) {
   const text = lines.filter((l) => !l.startsWith("#")).join("\n");
   return (
@@ -57,7 +66,19 @@ export default async function Bundle({ params }: { params: Promise<Params> }) {
     seen.add(k);
     return true;
   });
-  const withFiles = checks.filter((e) => typeof e.data.content === "string" && e.data.content);
+  const fileSeen = new Set<string>();
+  const withFiles = runs.filter((e) => {
+    if (typeof e.data.content !== "string" || !e.data.content) return false;
+    const name = e.data.test_file ?? e.data.test ?? "";
+    if (fileSeen.has(name)) return false;
+    fileSeen.add(name);
+    return true;
+  });
+  const savePath = (e: Event) => {
+    const t = e.data.test ?? "";
+    const f = e.data.test_file ?? t;
+    return t.endsWith(f) ? t : `tests/${f.split("/").pop()}`;
+  };
   const agentFiles = [...new Set(checks.map((e) => e.data.test!).filter((t) => /test_argus_/.test(t)))];
 
   return (
@@ -96,10 +117,11 @@ export default async function Bundle({ params }: { params: Promise<Params> }) {
                 <h3>Add the tests the agents wrote</h3>
                 {withFiles.length ? (
                   <>
-                    <p>Save each file under <span className="mono">tests/</span>.</p>
+                    <p>Save each one at the path shown. The copy button copies the file, ready to paste.</p>
                     {withFiles.map((e) => (
                       <div key={e.id} style={{ marginBottom: 12 }}>
-                        <Cmd lines={[`# ${e.data.test}`, ...String(e.data.content).split("\n")]} />
+                        <div className="fname">{savePath(e)}</div>
+                        <FileBox text={String(e.data.content)} />
                       </div>
                     ))}
                   </>
@@ -126,6 +148,12 @@ export default async function Bundle({ params }: { params: Promise<Params> }) {
                     `git checkout ${e.data.sha ?? (e.data.ref === "main" ? "main" : `pr-${pr}`)}   # ${e.data.ref}${e.data.sha ? ` @ ${short(e.data.sha)}` : ""}`,
                     `python -m pytest ${e.data.test} -q`,
                   ]} />
+                  {e.data.log_tail && (
+                    <details className="logtail">
+                      <summary>What Argus saw (last lines of the log)</summary>
+                      <pre>{e.data.log_tail}</pre>
+                    </details>
+                  )}
                 </div>
               </li>
             ))
