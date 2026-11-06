@@ -34,7 +34,7 @@ export default async function Landing() {
     <main id="top">
       <LandingFx />
 
-      <section className="hero" id="hero">
+      <section className="hero ink" id="hero">
         <div className="ph" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="art art-img" src="/velazquez.webp" alt="" fetchPriority="high" />
@@ -118,7 +118,7 @@ export default async function Landing() {
         </div>
       </section>
 
-      <section className="band" id="band">
+      <section className="band ink" id="band">
         <div className="ph" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="art-img" src="/peacock.webp" alt="" loading="lazy" />
@@ -258,7 +258,7 @@ export default async function Landing() {
         </div>
       </section>
 
-      <section className="close" id="closing">
+      <section className="close ink" id="closing">
         <div className="ph" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="art-img" src="/velazquez.webp" alt="" loading="lazy" />

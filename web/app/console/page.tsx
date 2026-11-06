@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { InvestigationsTable, LoadError, StageBar, StateBadge } from "@/components/console";
+import { EyeField } from "@/components/EyeField";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { PageHero } from "@/components/PageHero";
 import { durationMs, fmtAgo, fmtDuration, investigationHref, latestPerPr, median, ROLE_NAME, stateOf, type State } from "@/lib/derive";
 import { INSTALL_URL } from "@/lib/site";
 import { listInvestigations } from "@/lib/supabase";
@@ -42,14 +44,25 @@ export default async function Console({ searchParams }: { searchParams: Promise<
 
   return (
     <main className="con">
+      <PageHero art="/peacock.webp" position="40% 45%" credit="Peter Paul Rubens, Juno and Argus, c. 1610 (detail)" tall>
+        <h1>A hundred eyes on <em>every pull request.</em></h1>
+        <p className="lede">Every pull request Argus has checked, live from the event log. Open one to see who ran what, and the proof behind the verdict.</p>
+        <div className="row"><LiveRefresh running={running.length > 0} /></div>
+      </PageHero>
       <div className="wrap">
-        <div className="phead">
-          <div>
-            <h1>Console</h1>
-            <p>Every pull request Argus has checked, live from the event log. Open one to see who ran what, and the proof behind the verdict.</p>
-          </div>
-          <div className="side">
-            <LiveRefresh running={running.length > 0} />
+        <div className="lift">
+          <div className="frame">
+            <div className="eyes-head">
+              <h2><b>{Math.min(all.length, 100)}</b> of 100 eyes open</h2>
+              <p>One eye per run, oldest first. Hover one to see which pull request it watched.</p>
+            </div>
+            <EyeField rows={all} />
+            <div className="eye-legend">
+              <span><i style={{ background: "var(--ok)" }} />Verified</span>
+              <span><i style={{ background: "var(--bad)" }} />Changes needed or not reproduced</span>
+              <span><i style={{ background: "var(--amb)" }} />Checking now, or needs a maintainer</span>
+              <span><i style={{ background: "var(--faint)" }} />Stopped</span>
+            </div>
           </div>
         </div>
 

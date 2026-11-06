@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "./Icons";
 import { INSTALL_URL } from "@/lib/site";
+import { ThemeToggle } from "./ThemeToggle";
 
 const LINKS: [string, string][] = [
   ["/console", "Console"],
@@ -27,7 +28,7 @@ export function Nav() {
   const solid = !overArt || scrolled;
 
   return (
-    <header className={`nav${solid ? " solid" : ""}`}>
+    <header className={`nav${solid ? " solid" : " ink over"}`}>
       <nav className="wrap">
         <Link className="brand" href="/" aria-label="Argus home">
           <Icon id="i-eye" size={30} />
@@ -40,9 +41,12 @@ export function Nav() {
             </Link>
           ))}
         </div>
-        <a className="btn btn-light btn-sm" href={INSTALL_URL}>
-          Install on GitHub
-        </a>
+        <div className="nav-end">
+          <ThemeToggle />
+          <a className="btn btn-light btn-sm" href={INSTALL_URL}>
+            Install on GitHub
+          </a>
+        </div>
       </nav>
     </header>
   );

@@ -14,15 +14,21 @@ export const metadata: Metadata = {
   openGraph: { title: "Argus · Don't close the door. Make them prove it.", description: "Four agents prove or break a pull request's claim with real tests." },
 };
 
-export const viewport: Viewport = { themeColor: "#0d0d0b", viewportFit: "cover" };
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0d0d0b" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f1ea" },
+  ],
+  viewportFit: "cover",
+};
 
-const MOTION_SCRIPT = `try{var d=document.documentElement;d.classList.add("js");if(matchMedia("(prefers-reduced-motion: reduce)").matches||location.search.indexOf("static")>-1)d.classList.add("still")}catch(e){}`;
+const MOTION_SCRIPT = `try{var d=document.documentElement;var t=null;try{t=localStorage.getItem("argus.theme")}catch(e){}var q=location.search.match(/theme=(light|dark)/);if(q)t=q[1];if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";d.dataset.theme=t;d.classList.add("js");if(matchMedia("(prefers-reduced-motion: reduce)").matches||location.search.indexOf("static")>-1)d.classList.add("still")}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
-        {/* mark JS before first paint so reveal animations start hidden, not flash */}
+        {/* theme and motion flags before first paint: no theme flash, reveals start hidden */}
         <script dangerouslySetInnerHTML={{ __html: MOTION_SCRIPT }} />
       </head>
       <body>

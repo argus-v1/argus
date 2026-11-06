@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LoadError, Pair, StateBadge } from "@/components/console";
 import { Icon, ROLE_ICON, ROLE_VAR } from "@/components/Icons";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { PageHero } from "@/components/PageHero";
 import {
   durationMs, fmtDuration, investigationHref, median, ROLE_NAME, skepticCaught, stageDurations, stateOf, STATE_WORDS, type State,
 } from "@/lib/derive";
@@ -81,14 +82,12 @@ export default async function Evals({ searchParams }: { searchParams: Promise<{ 
 
   return (
     <main className="con">
+      <PageHero art="/jordaens.webp" position="50% 30%" credit="Jacob Jordaens, Mercury, Argus and Io (detail)">
+        <h1>Evals <em>by model pair</em></h1>
+        <p className="lede">How the agents perform on real runs, by model pair. Every number here is computed from the event log; a pair with no runs says so instead of guessing.</p>
+        <div className="row"><LiveRefresh running={invs.some((i) => i.status === "running")} /></div>
+      </PageHero>
       <div className="wrap">
-        <div className="phead">
-          <div>
-            <h1>Evals</h1>
-            <p>How the agents perform on real runs, by model pair. Every number here is computed from the event log; a pair with no runs says so instead of guessing.</p>
-          </div>
-          <div className="side"><LiveRefresh running={invs.some((i) => i.status === "running")} /></div>
-        </div>
 
         {runs.length === 0 ? (
           <div className="sect"><div className="empty"><h3>No runs to evaluate yet</h3><p>Evals fill in from real investigations. Label a pull request with <span className="mono">argus</span> to start one.</p></div></div>

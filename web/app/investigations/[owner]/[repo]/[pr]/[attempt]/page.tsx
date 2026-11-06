@@ -49,11 +49,16 @@ export default async function InvestigationPage({ params }: { params: Promise<Pa
   const at = STAGES.indexOf(inv.stage);
   const base = investigationHref(inv);
   const scribeMsg = events.find((e) => e.role === "scribe" && e.kind === "message");
+  const newer = attempts.filter((a) => a.attempt > attempt).at(-1);
+  const github = events.filter((e) => e.kind === "label" || e.kind === "comment");
   const reason = scribeMsg?.message.match(/^verdict:\s*[^·]+·\s*(.+)$/i)?.[1];
 
   return (
     <main className="con">
-      <div className="wrap">
+      <section className="phero ink">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/velazquez.webp" alt="" style={{ objectPosition: "80% 40%" }} />
+        <div className="wrap">
         <header className="ihead">
           <div className="crumbs">
             <Link href="/investigations">Investigations</Link><span>/</span>
@@ -87,9 +92,19 @@ export default async function InvestigationPage({ params }: { params: Promise<Pa
               ))}
             </nav>
           )}
+          {newer && (
+            <div className="newer" role="status">
+              <span><b>Attempt {newer.attempt}</b> {newer.status === "running" ? "is running now" : "has finished"} on the author&apos;s new push.</span>
+              <Link className="btn btn-light btn-sm" href={investigationHref(newer)}>{newer.status === "running" ? "Watch it live" : "See attempt " + newer.attempt} <Icon id="i-arrow" size={14} /></Link>
+            </div>
+          )}
         </header>
+        </div>
+        <p className="credit">Diego Velázquez, Mercury and Argus, c. 1659 (detail)</p>
+      </section>
+      <div className="wrap">
 
-        <div className="stages" aria-label="Stages">
+        <div className="stages" aria-label="Stages" style={{ marginTop: 32 }}>
           {STAGES.map((s, i) => {
             const role = STAGE_ROLE[s];
             const cls = inv.status === "done" || i < at ? "done" : i === at && inv.status === "running" ? "now" : i === at ? "done" : "pending";
@@ -138,6 +153,30 @@ export default async function InvestigationPage({ params }: { params: Promise<Pa
                       {e.data.summary && <span className="sum">{e.data.summary}</span>}
                     </li>
                   ))}
+                </ul>
+              )}
+            </div>
+            <div className="panel">
+              <header><span>On GitHub</span>{inv.pr_url && <a className="u" href={inv.pr_url}>#{pr}</a>}</header>
+              {github.length === 0 ? (
+                <p style={{ padding: "14px 18px", margin: 0, color: "var(--faint)", fontSize: 14 }}>Nothing posted yet.</p>
+              ) : (
+                <ul className="ghlog">
+                  {github.map((e) => {
+                    const lbl = e.message.replace(/^label:\s*/, "");
+                    const tone = lbl === "verified" ? "var(--ok)" : lbl === "changes-needed" ? "var(--bad)" : "var(--amb)";
+                    return (
+                      <li key={e.id}>
+                        <Icon id={e.kind === "comment" ? "i-scr" : "i-dot"} size={15} style={{ color: e.kind === "comment" ? "var(--scr)" : tone }} />
+                        {e.kind === "comment" ? (
+                          <a className="u" href={e.message}>Argus posted the evidence comment</a>
+                        ) : (
+                          <span>Label set to <span className="lb" style={{ color: tone }}>{lbl}</span></span>
+                        )}
+                        <time>{new Date(e.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" })}</time>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
