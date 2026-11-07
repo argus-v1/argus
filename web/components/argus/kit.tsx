@@ -31,10 +31,10 @@ function useStill() {
 export function Reveal({ children, className, index = 0, as = "div" }: { children: React.ReactNode; className?: string; index?: number; as?: "div" | "section" | "li" }) {
   const still = useStill();
   const M = motion[as];
-  if (still) return <M className={className}>{children}</M>;
+  if (still) return <M className={cn("reveal", className)}>{children}</M>;
   return (
     <M
-      className={className}
+      className={cn("reveal", className)}
       initial={{ opacity: 0, y: 14 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
