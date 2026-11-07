@@ -164,3 +164,7 @@ html.theme-vt header.nav { view-transition-name: none; }
 /* Reveal (components/argus/kit.tsx) starts hidden for its fade-up; never leave content hidden when motion is off. */
 .still .reveal { opacity: 1 !important; transform: none !important; }
 @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; } }
+.bar-grow { transform-origin: left center; animation: bar-grow .7s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes bar-grow { from { transform: scaleX(0); } }
+.still .bar-grow { animation: none; }
+@media (prefers-reduced-motion: reduce) { .bar-grow { animation: none; } }
