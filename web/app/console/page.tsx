@@ -88,7 +88,7 @@ export default async function Console({ searchParams }: { searchParams: Promise<
   const activity = events
     .filter((e) => e.kind !== "banner" && !isRelayNote(e))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)
-    .slice(0, 14);
+    .slice(0, 40);
 
   // the agents on watch
   const roster = AGENTS.map((role) => {
@@ -200,7 +200,7 @@ export default async function Console({ searchParams }: { searchParams: Promise<
                     <FocusReason events={focusEvents} />
 
                     <ol className="divide-y divide-border" aria-label="Latest steps">
-                      {focusEvents.filter((e) => e.kind !== "banner" && !isRelayNote(e)).slice(-5).reverse().map((e) => (
+                      {focusEvents.filter((e) => e.kind !== "banner" && !isRelayNote(e)).slice(-7).reverse().map((e) => (
                         <li key={e.id} className="grid grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 py-2.5 text-sm sm:grid-cols-[100px_minmax(0,1fr)_auto]">
                           <RoleTag role={e.role} />
                           <span className="min-w-0 truncate"><StepText e={e} /></span>
@@ -213,8 +213,9 @@ export default async function Console({ searchParams }: { searchParams: Promise<
               </Reveal>
             )}
 
-            <Reveal className={cn("min-w-0", focus ? "lg:col-span-4" : "lg:col-span-12")} index={1}>
-              <Card className="h-full gap-0 py-0">
+            <div className={cn("flex min-w-0 flex-col gap-6", focus ? "lg:col-span-4" : "lg:col-span-12")}>
+            <Reveal index={1}>
+              <Card className="gap-0 py-0">
                 <CardHeader className="border-b border-border px-6 py-5">
                   <CardTitle className="text-base font-medium">What needs you</CardTitle>
                   <p className="text-xs text-muted-foreground">Open pull requests, by your next move.</p>
@@ -238,12 +239,37 @@ export default async function Console({ searchParams }: { searchParams: Promise<
                 </CardContent>
               </Card>
             </Reveal>
+            <Reveal index={2} className="flex-1">
+              <Card className="h-full gap-0 py-0">
+                <CardHeader className="border-b border-border px-6 py-5">
+                  <CardTitle className="text-base font-medium">On watch</CardTitle>
+                  <p className="text-xs text-muted-foreground">The four agents, from their stage reports.</p>
+                </CardHeader>
+                <CardContent className="px-0">
+                  <ul className="divide-y divide-border">
+                    {roster.map((a) => (
+                      <li key={a.role} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 py-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <RoleTag role={a.role as Role} className="[&>span]:text-foreground" />
+                            {a.busy && <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal text-amb">working</Badge>}
+                          </div>
+                          <div className="mt-0.5 font-mono text-xs text-muted-foreground">{a.model} · {a.runs} reports · median {fmtDuration(a.med)}</div>
+                        </div>
+                        <span className="font-mono text-[11px] text-muted-foreground">{a.last ? fmtAgo(a.last, now) : "–"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </Reveal>
+            </div>
           </section>
 
-          {/* ---- every pull request + live activity and the agents ---- */}
+          {/* ---- every pull request + live activity (the feed scrolls inside the table's height) ---- */}
           <section className="mt-6 grid gap-6 lg:grid-cols-12">
             <Reveal className="min-w-0 lg:col-span-8">
-              <Card className="gap-0 py-0">
+              <Card className="h-full gap-0 py-0 lg:min-h-[460px]">
                 <CardHeader className="flex flex-row items-baseline justify-between border-b border-border px-6 py-5">
                   <div>
                     <CardTitle className="text-base font-medium">Pull requests</CardTitle>
@@ -318,59 +344,32 @@ export default async function Console({ searchParams }: { searchParams: Promise<
               </Card>
             </Reveal>
 
-            <div className="min-w-0 space-y-6 lg:col-span-4">
-              <Reveal index={1}>
-                <Card className="gap-0 py-0">
-                  <CardHeader className="border-b border-border px-6 py-5">
-                    <CardTitle className="text-base font-medium">Live activity</CardTitle>
-                    <p className="text-xs text-muted-foreground">Agents, sandbox runs and GitHub, newest first.</p>
-                  </CardHeader>
-                  <CardContent className="px-0">
-                    <ol className="divide-y divide-border">
-                      {activity.map((e) => {
-                        const run = runOf.get(e.investigation_id);
-                        return (
-                          <li key={e.id}>
-                            <Link href={run ? investigationHref(run) : "/investigations"} className="block space-y-1 px-6 py-3 transition-colors hover:bg-accent/40">
-                              <div className="flex items-center justify-between gap-3">
-                                <RoleTag role={e.role} />
-                                <span className="font-mono text-[11px] text-muted-foreground tabular-nums">#{run?.pr_number} · {fmtAgo(e.created_at, now)}</span>
-                              </div>
-                              <div className="line-clamp-2 text-sm"><StepText e={e} /></div>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  </CardContent>
-                </Card>
-              </Reveal>
-
-              <Reveal index={2}>
-                <Card className="gap-0 py-0">
-                  <CardHeader className="border-b border-border px-6 py-5">
-                    <CardTitle className="text-base font-medium">On watch</CardTitle>
-                    <p className="text-xs text-muted-foreground">The four agents, from their stage reports.</p>
-                  </CardHeader>
-                  <CardContent className="px-0">
-                    <ul className="divide-y divide-border">
-                      {roster.map((a) => (
-                        <li key={a.role} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 py-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <RoleTag role={a.role as Role} className="[&>span]:text-foreground" />
-                              {a.busy && <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal text-amb">working</Badge>}
+            <Reveal className="relative min-w-0 lg:col-span-4" index={1}>
+              <Card className="flex max-h-[560px] flex-col gap-0 py-0 lg:absolute lg:inset-0 lg:max-h-none">
+                <CardHeader className="border-b border-border px-6 py-5">
+                  <CardTitle className="text-base font-medium">Live activity</CardTitle>
+                  <p className="text-xs text-muted-foreground">Agents, sandbox runs and GitHub, newest first.</p>
+                </CardHeader>
+                <CardContent className="min-h-0 flex-1 overflow-y-auto px-0 [scrollbar-width:thin]">
+                  <ol className="divide-y divide-border">
+                    {activity.map((e) => {
+                      const run = runOf.get(e.investigation_id);
+                      return (
+                        <li key={e.id}>
+                          <Link href={run ? investigationHref(run) : "/investigations"} className="block space-y-1 px-6 py-3 transition-colors hover:bg-accent/40">
+                            <div className="flex items-center justify-between gap-3">
+                              <RoleTag role={e.role} />
+                              <span className="font-mono text-[11px] text-muted-foreground tabular-nums">#{run?.pr_number} · {fmtAgo(e.created_at, now)}</span>
                             </div>
-                            <div className="mt-0.5 font-mono text-xs text-muted-foreground">{a.model} · {a.runs} reports · median {fmtDuration(a.med)}</div>
-                          </div>
-                          <span className="font-mono text-[11px] text-muted-foreground">{a.last ? fmtAgo(a.last, now) : "–"}</span>
+                            <div className="line-clamp-2 text-sm"><StepText e={e} /></div>
+                          </Link>
                         </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              </Reveal>
-            </div>
+                      );
+                    })}
+                  </ol>
+                </CardContent>
+              </Card>
+            </Reveal>
           </section>
 
           <p className="mt-10 text-sm text-muted-foreground">
