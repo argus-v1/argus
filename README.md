@@ -12,7 +12,7 @@ Four AI agents verify a pull request's claim with real, sandboxed tests when a m
 [![Website](https://img.shields.io/badge/website-argus--alpha--sand.vercel.app-D9B673)](https://argus-alpha-sand.vercel.app)
 [![Console](https://img.shields.io/badge/console-live-4FCF7F)](https://argus-alpha-sand.vercel.app/console)
 [![Evals](https://img.shields.io/badge/evals-by%20model%20pair-D9B673)](https://argus-alpha-sand.vercel.app/evals)
-[![Demo](https://img.shields.io/badge/demo-3%20min%20film-EC4FA3)](https://argus-alpha-sand.vercel.app/argus-demo.mp4)
+[![Demo](https://img.shields.io/badge/demo-2%3A46%20film-EC4FA3)](https://argus-alpha-sand.vercel.app/argus-demo.mp4)
 [![Built on Switch](https://img.shields.io/badge/built%20on-Switch-FF895E)](https://github.com/sandbox-quantum/switch)
 [![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-A983FF)](#how-it-works)
 [![Sandbox](https://img.shields.io/badge/tests-Docker%20%C2%B7%20no%20network-5B93FF)](#how-it-works)
@@ -58,10 +58,10 @@ A contributor fixes `parse_date('')` in [argus-v1/datewise](https://github.com/a
 
 <div align="center">
   <a href="https://argus-alpha-sand.vercel.app/argus-demo.mp4">
-    <img src="docs/readme/demo-preview.gif" alt="Argus demo: the Skeptic finds whitespace still crashes, then the fix is verified" width="860">
+    <img src="docs/readme/demo-preview.gif" alt="Argus demo: the label goes on, the Reproducer proves the bug, the Scribe reports, the PR comes back verified" width="860">
   </a>
   <br>
-  <sub>▶ <a href="https://argus-alpha-sand.vercel.app/argus-demo.mp4"><b>Watch the full 3-minute film</b></a> · a replay of PR #4's recorded evidence, narrated</sub>
+  <sub>▶ <a href="https://argus-alpha-sand.vercel.app/argus-demo.mp4"><b>Watch the full film (2:46)</b></a> · screen recordings of a live run on <a href="https://github.com/argus-v1/datewise/pull/7">datewise #7</a>: GitHub, the Discord room and the console, narrated</sub>
 </div>
 
 <details open>
