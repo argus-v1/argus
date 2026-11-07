@@ -118,7 +118,7 @@ STATUS: <done | revise | blocked | needs-human>
 - One message per step. No greetings, no filler, no markdown headings.
 - The `STATUS:` line is required and always last. Argus reads it to advance the investigation.
 - Before posting `STATUS: done`, your output JSON file must already exist in the evidence folder.
-- If a Switch call fails with `Not connected to a room`, call `connect_to_room` with the room you were addressed in (find the `pr-review` room with `list_rooms`), then post again. Never finish your step without your message posted.
+- Post your message once. If Switch refuses it (for example `Not connected to a room`), call `connect_to_room` once and try one more time. If that fails too, stop trying: your `room_message` in your output JSON is enough, and Argus relays it. Never loop on posting; finishing your step on time matters more.
 - Write files with your file-writing tool, not shell redirection such as `cat > file <<EOF`.
 - Also save your room message, exactly as you post it, in your output JSON as `"room_message"` (for the Scribe: in `verdict.json`). If Switch won't let you post, Argus relays it from there.
 
