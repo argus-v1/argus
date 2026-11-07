@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Spectral } from "next/font/google";
 import { IconSprite } from "@/components/Icons";
 import { Nav } from "@/components/Nav";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import "./ui.css";
 import "./globals.css";
 
 const serif = Spectral({ variable: "--font-spectral", subsets: ["latin"], weight: ["300", "400", "500"], style: ["normal", "italic"] });
@@ -33,8 +35,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <IconSprite />
-        <Nav />
-        {children}
+        <TooltipProvider delayDuration={150}>
+          <Nav />
+          {children}
+        </TooltipProvider>
       </body>
     </html>
   );

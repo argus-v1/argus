@@ -45,8 +45,8 @@ export function LiveRefresh({ investigationIds, running = false }: { investigati
   }, [running, router]);
 
   return (
-    <span className={`live${live ? " on" : ""}`} role="status">
-      <i />
+    <span className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 font-mono text-xs text-muted-foreground" role="status">
+      <i className={`size-1.5 rounded-full ${live ? "bg-ok motion-safe:animate-pulse" : "bg-faint"}`} aria-hidden />
       {live ? "Live" : "Connecting"}
     </span>
   );

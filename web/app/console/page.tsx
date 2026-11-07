@@ -1,142 +1,258 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { InvestigationsTable, LoadError, StageBar, StateBadge } from "@/components/console";
-import { NowWatching } from "@/components/NowWatching";
+import { ArrowUpRight, FileWarning, GitMerge, Hand, Timer } from "lucide-react";
+import { PageHeader, Reveal, StageTracker, StateBadge } from "@/components/argus/kit";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import { PageHero } from "@/components/PageHero";
-import { durationMs, fmtAgo, fmtDuration, investigationHref, latestPerPr, median, ROLE_NAME, stateOf, type State } from "@/lib/derive";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  durationMs, failingCases, fmtAgo, fmtDuration, investigationHref, latestPerPr, median, ROLE_NAME, scribeReason, stateOf,
+} from "@/lib/derive";
+import { prStates, type PrState } from "@/lib/github";
 import { INSTALL_URL } from "@/lib/site";
 import { getEvents, listInvestigations } from "@/lib/supabase";
-import { STAGE_ROLE, type Investigation } from "@/lib/types";
-import "../console.css";
+import { STAGE_ROLE, type Event, type Investigation } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Console" };
+export const metadata: Metadata = { title: "Maintainer queue" };
 
-const COLUMNS: { key: string; title: string; states: State[] }[] = [
-  { key: "running", title: "Verifying", states: ["running"] },
-  { key: "changes", title: "Changes needed", states: ["changes-needed", "not-reproduced"] },
-  { key: "verified", title: "Verified", states: ["verified"] },
-  { key: "human", title: "Needs a maintainer", states: ["needs-human", "stopped"] },
-];
+const STALE_MS = 15 * 60 * 1000;
 
-export default async function Console({ searchParams }: { searchParams: Promise<{ repo?: string }> }) {
+type Lane = "merge" | "contributor" | "eyes";
+
+function laneOf(inv: Investigation, now: number): Lane | null {
+  const s = stateOf(inv);
+  if (s === "verified") return "merge";
+  if (s === "changes-needed" || s === "not-reproduced") return "contributor";
+  if (s === "needs-human" || s === "stopped") return "eyes";
+  if (s === "running" && now - Date.parse(inv.started_at) > STALE_MS) return "eyes";
+  return null;
+}
+
+export default async function Queue({ searchParams }: { searchParams: Promise<{ repo?: string }> }) {
   const { repo } = await searchParams;
-  let all: Investigation[];
+  let all: Investigation[] = [];
+  let loadError: string | null = null;
   try {
     all = await listInvestigations();
   } catch (e) {
-    return (
-      <main className="con"><div className="wrap"><div className="phead"><div><h1>Console</h1></div></div><div className="sect"><LoadError what="the console" message={(e as Error).message} /></div></div></main>
-    );
+    loadError = (e as Error).message;
   }
+  const now = Date.now();
   const repos = [...new Set(all.map((r) => r.repo))].sort();
   const rows = repo ? all.filter((r) => r.repo === repo) : all;
-  const now = Date.now();
   const prs = latestPerPr(rows);
-  const running = rows.filter((r) => r.status === "running");
+  const states = await prStates(prs);
+  const isOpen = (inv: Investigation) => (states.get(`${inv.repo}#${inv.pr_number}`) ?? "open") === "open";
+
+  const openPrs = prs.filter(isOpen);
+  const lanes: Record<Lane, Investigation[]> = { merge: [], contributor: [], eyes: [] };
+  for (const inv of openPrs) {
+    const l = laneOf(inv, now);
+    if (l) lanes[l].push(inv);
+  }
+  const running = rows.filter((r) => r.status === "running" && now - Date.parse(r.started_at) <= STALE_MS);
+  const laneEvents = await getEvents([...lanes.contributor, ...lanes.eyes, ...running].map((r) => r.id)).catch(() => [] as Event[]);
+  const eventsOf = (id: string) => laneEvents.filter((e) => e.investigation_id === id);
   const finished = rows.filter((r) => r.status === "done" && r.finished_at);
-  const focus = running[0] ?? rows[0];
-  const focusEvents = focus ? await getEvents([focus.id]).catch(() => []) : [];
-  const verifiedPrs = prs.filter((r) => r.verdict === "verified").length;
-  const sentBack = rows.filter((r) => r.verdict === "changes-needed" || r.verdict === "not-reproduced").length;
-  const medianMs = median(finished.map((r) => durationMs(r, now)!).filter((x) => x != null));
-  const weekAgo = now - 7 * 864e5;
-  const thisWeek = rows.filter((r) => Date.parse(r.started_at) > weekAgo).length;
+  const medianMs = median(finished.map((r) => durationMs(r, now)).filter((x): x is number => x != null));
+  const closed = prs.filter((p) => !isOpen(p));
 
   return (
-    <main className="con">
-      <PageHero art="/peacock.webp" position="40% 45%" credit="Peter Paul Rubens, Juno and Argus, c. 1610 (detail)" tall>
-        <h1>A hundred eyes on <em>every pull request.</em></h1>
-        <p className="lede">Every pull request Argus has checked, live from the event log. Open one to see who ran what, and the proof behind the verdict.</p>
-        <div className="row"><LiveRefresh running={running.length > 0} /></div>
-      </PageHero>
-      <div className="wrap">
-        <div className="lift">
-          <div className="frame">
-            {focus ? (
-              <NowWatching inv={focus} events={focusEvents} now={now} />
-            ) : (
-              <div className="empty"><h3>Waiting for the first pull request</h3><p>Add the <span className="mono">argus</span> label to a pull request and it appears here, live.</p></div>
-            )}
-          </div>
-        </div>
+    <main className="mx-auto max-w-[1240px] px-5 pb-24 md:px-8">
+      <PageHeader
+        eyebrow="Maintainer queue"
+        title="What needs you,"
+        accent="and what doesn't."
+        lede="Every pull request Argus has checked, sorted by the one thing you need to do next. Verified ones are ready to merge; the rest say exactly what's missing."
+      >
+        <LiveRefresh running={running.length > 0} />
+        <Button asChild variant="outline" size="sm"><a href={INSTALL_URL}>Install on a repo</a></Button>
+      </PageHeader>
 
-        {repos.length > 1 && (
-          <nav className="filters" aria-label="Repository" style={{ marginTop: 24 }}>
-            <Link className="fchip" href="/console" aria-current={!repo ? "true" : undefined}>All repositories</Link>
-            {repos.map((r) => (
-              <Link key={r} className="fchip" href={`/console?repo=${encodeURIComponent(r)}`} aria-current={repo === r ? "true" : undefined}>{r}</Link>
+      {repos.length > 1 && (
+        <nav className="mt-6 flex flex-wrap gap-2" aria-label="Repository">
+          <Button asChild size="sm" variant={!repo ? "secondary" : "ghost"}><Link href="/console">All repositories</Link></Button>
+          {repos.map((r) => (
+            <Button key={r} asChild size="sm" variant={repo === r ? "secondary" : "ghost"}><Link href={`/console?repo=${encodeURIComponent(r)}`}>{r}</Link></Button>
+          ))}
+        </nav>
+      )}
+
+      {loadError && (
+        <Card className="mt-8"><CardContent className="py-6 text-sm text-muted-foreground">Couldn&apos;t reach the event log ({loadError}). Refresh in a moment.</CardContent></Card>
+      )}
+
+      {!loadError && all.length === 0 && (
+        <Card className="mt-8">
+          <CardContent className="py-10 text-center">
+            <h2 className="font-serif text-2xl">No pull requests checked yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Install the Argus GitHub App and add the <span className="font-mono">argus</span> label to a pull request. It shows up here as it runs.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {all.length > 0 && (
+        <>
+          <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Totals">
+            {[
+              { icon: GitMerge, k: "Ready to merge", v: lanes.merge.length, n: "every claim proven" },
+              { icon: FileWarning, k: "Waiting on contributor", v: lanes.contributor.length, n: "a gap or no bug found" },
+              { icon: Hand, k: "Needs your eyes", v: lanes.eyes.length, n: "stopped, stuck or unclear" },
+              { icon: Timer, k: "Label to verdict", v: medianMs == null ? "–" : fmtDuration(medianMs), n: `median of ${finished.length} runs` },
+            ].map((s, i) => (
+              <Reveal key={s.k} index={i}>
+                <Card className="gap-2 py-5">
+                  <CardContent className="space-y-1 px-5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground"><s.icon className="size-3.5" aria-hidden />{s.k}</div>
+                    <div className="font-serif text-4xl font-light tabular-nums">{s.v}</div>
+                    <div className="text-xs text-muted-foreground">{s.n}</div>
+                  </CardContent>
+                </Card>
+              </Reveal>
             ))}
-          </nav>
-        )}
+          </section>
 
-        {all.length === 0 ? (
-          <div className="sect">
-            <div className="empty">
-              <h3>No pull requests checked yet</h3>
-              <p>Install the Argus GitHub App on a repository and add the <span className="mono">argus</span> label to a pull request. Its investigation shows up here as it runs.</p>
-              <p style={{ marginTop: 20 }}><a className="btn btn-light" href={INSTALL_URL}>Install the GitHub App</a></p>
-            </div>
-          </div>
-        ) : (
-          <>
-            <section className="sect" aria-label="Totals">
-              <div className="stats">
-                <div className="stat"><div className="k">Pull requests</div><div className="v">{prs.length}</div><div className="n">{rows.length} runs in all · {thisWeek} this week</div></div>
-                <div className="stat"><div className="k">Verified</div><div className="v">{verifiedPrs}</div><div className="n">latest attempt proved every claim</div></div>
-                <div className="stat"><div className="k">Sent back</div><div className="v">{sentBack}</div><div className="n">runs that found a gap or no bug</div></div>
-                <div className="stat"><div className="k">Label to verdict</div><div className="v">{medianMs == null ? "–" : fmtDuration(medianMs)}</div><div className="n">median across {finished.length} finished runs</div></div>
-              </div>
-            </section>
-
-            {running.length > 0 && (
-              <section className="sect">
-                <header><h2>Running now</h2><p className="hint">Updates as each agent finishes.</p></header>
-                <div className="runnow">
-                  {running.map((r) => (
-                    <Link key={r.id} className="rcard" href={investigationHref(r)}>
-                      <div className="m"><span>{r.repo} #{r.pr_number} · attempt {r.attempt}</span><span>{fmtDuration(durationMs(r, now))}</span></div>
-                      <div className="t">{r.pr_title ?? "Untitled pull request"}</div>
-                      <StageBar inv={r} />
-                      <div className="now">{ROLE_NAME[STAGE_ROLE[r.stage]]} is {r.stage}</div>
+          {running.length > 0 && (
+            <section className="mt-10 space-y-3">
+              <h2 className="text-sm font-medium text-muted-foreground">Verifying now</h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                {running.map((r, i) => (
+                  <Reveal key={r.id} index={i}>
+                    <Link href={investigationHref(r)} className="block">
+                      <Card className="gap-4 py-5 transition-colors hover:bg-accent/40">
+                        <CardContent className="space-y-4 px-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-mono text-xs text-muted-foreground">{r.repo} #{r.pr_number} · attempt {r.attempt}</div>
+                              <div className="truncate font-medium">{r.pr_title ?? "Untitled pull request"}</div>
+                            </div>
+                            <span className="font-mono text-xs text-muted-foreground tabular-nums">{fmtDuration(durationMs(r, now))}</span>
+                          </div>
+                          <StageTracker stage={r.stage} status={r.status} attempt={r.attempt} compact />
+                          <div className="text-xs text-muted-foreground">{ROLE_NAME[STAGE_ROLE[r.stage]]} is {r.stage}…</div>
+                        </CardContent>
+                      </Card>
                     </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section className="sect">
-              <header><h2>Pull requests by verdict</h2><p className="hint">Latest attempt of each pull request.</p></header>
-              <div className="queue">
-                {COLUMNS.map((col) => {
-                  const items = prs.filter((r) => col.states.includes(stateOf(r)));
-                  return (
-                    <div className="qcol" key={col.key}>
-                      <header><StateBadge state={col.states[0]} /><b>{items.length}</b></header>
-                      <div className="qlist">
-                        {items.length === 0 && <div className="qempty">None right now.</div>}
-                        {items.map((r) => (
-                          <Link key={r.id} className="qcard" href={investigationHref(r)}>
-                            <div className="t">{r.pr_title ?? "Untitled pull request"}</div>
-                            <div className="m">#{r.pr_number} · {r.contributor ?? "unknown"} · attempt {r.attempt} · {fmtAgo(r.started_at, now)}</div>
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                  </Reveal>
+                ))}
               </div>
             </section>
+          )}
 
-            <section className="sect">
-              <header><h2>Recent runs</h2><p className="hint"><Link className="u" href="/investigations">All investigations</Link> · <Link className="u" href="/evals">Evals</Link></p></header>
-              <InvestigationsTable rows={rows.slice(0, 12)} now={now} />
-            </section>
-          </>
-        )}
-      </div>
+          <section className="mt-10 grid gap-4 lg:grid-cols-3" aria-label="Queue">
+            <LaneColumn title="Ready to merge" hint="Argus proved every claim. Review the diff and merge." items={lanes.merge} empty="Nothing verified and open right now.">
+              {(inv) => (
+                <>
+                  <p className="text-xs text-muted-foreground">Verified on attempt {inv.attempt} · {fmtAgo(inv.finished_at ?? inv.started_at, now)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {inv.pr_url && <Button asChild size="sm"><a href={inv.pr_url}>Review &amp; merge<ArrowUpRight /></a></Button>}
+                    <Button asChild size="sm" variant="ghost"><Link href={investigationHref(inv)}>Evidence</Link></Button>
+                  </div>
+                </>
+              )}
+            </LaneColumn>
+
+            <LaneColumn title="Waiting on contributor" hint="Argus found a gap. The contributor has a fix-it brief; a new push re-checks automatically." items={lanes.contributor} empty="No pull request is waiting on a fix.">
+              {(inv) => {
+                const cases = failingCases(eventsOf(inv.id)).slice(0, 4);
+                const reason = scribeReason(eventsOf(inv.id));
+                return (
+                  <>
+                    {reason && <p className="text-sm text-pretty text-muted-foreground">{reason}</p>}
+                    {cases.length > 0 && (
+                      <ul className="space-y-1">
+                        {cases.map((c) => (
+                          <li key={c.test} className="flex items-baseline justify-between gap-3 font-mono text-xs">
+                            <span className="truncate">{c.input}</span>
+                            <span className="shrink-0 text-bad">{c.message.split(":")[0]}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="secondary"><Link href={`${investigationHref(inv)}#fix`}>Fix-it brief</Link></Button>
+                      {inv.pr_url && <Button asChild size="sm" variant="ghost"><a href={inv.pr_url}>Open PR<ArrowUpRight /></a></Button>}
+                    </div>
+                  </>
+                );
+              }}
+            </LaneColumn>
+
+            <LaneColumn title="Needs your eyes" hint="Argus couldn't finish or wasn't sure. A person should look." items={lanes.eyes} empty="Nothing is stuck.">
+              {(inv) => {
+                const err = eventsOf(inv.id).filter((e) => e.kind === "error").at(-1);
+                const why = inv.verdict === "needs-human" ? scribeReason(eventsOf(inv.id)) ?? "The agents disagreed." : err?.message ?? (inv.status === "running" ? "Running for over 15 minutes." : "The run stopped before a verdict.");
+                return (
+                  <>
+                    <p className="text-sm text-pretty text-muted-foreground">{why}</p>
+                    <p className="text-xs text-muted-foreground">Re-add the <span className="font-mono">argus</span> label to run it again.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild size="sm" variant="secondary"><Link href={investigationHref(inv)}>What happened</Link></Button>
+                      {inv.pr_url && <Button asChild size="sm" variant="ghost"><a href={inv.pr_url}>Open PR<ArrowUpRight /></a></Button>}
+                    </div>
+                  </>
+                );
+              }}
+            </LaneColumn>
+          </section>
+
+          {closed.length > 0 && (
+            <Reveal as="section" className="mt-10">
+              <h2 className="mb-3 text-sm font-medium text-muted-foreground">Closed or merged since Argus checked them</h2>
+              <div className="flex flex-wrap gap-2">
+                {closed.map((c) => (
+                  <Link key={c.id} href={investigationHref(c)}>
+                    <Badge variant="outline" className="gap-2 py-1 font-normal text-muted-foreground hover:text-foreground">
+                      <span className="font-mono">#{c.pr_number}</span>
+                      {c.pr_title?.slice(0, 48) ?? "Untitled"}
+                      <span className="text-faint">· {states.get(`${c.repo}#${c.pr_number}`) as PrState}</span>
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            </Reveal>
+          )}
+
+          <p className="mt-10 text-sm text-muted-foreground">
+            <Link className="underline underline-offset-4 hover:text-foreground" href="/investigations">All investigations</Link> ·{" "}
+            <Link className="underline underline-offset-4 hover:text-foreground" href="/evals">How well the agents do</Link>
+          </p>
+        </>
+      )}
     </main>
+  );
+}
+
+function LaneColumn({
+  title, hint, items, empty, children,
+}: { title: string; hint: string; items: Investigation[]; empty: string; children: (inv: Investigation) => React.ReactNode }) {
+  return (
+    <Card className="gap-0 py-0">
+      <CardHeader className="border-b border-border px-5 py-4">
+        <CardTitle className="flex items-center justify-between text-base font-medium">
+          {title}
+          <span className="font-mono text-sm text-muted-foreground tabular-nums">{items.length}</span>
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </CardHeader>
+      <CardContent className="divide-y divide-border px-0">
+        {items.length === 0 && <p className="px-5 py-6 text-sm text-muted-foreground">{empty}</p>}
+        {items.map((inv, i) => (
+          <Reveal key={inv.id} index={i} className="space-y-3 px-5 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-mono text-xs text-muted-foreground">{inv.repo} #{inv.pr_number} · {inv.contributor ?? "unknown"}</div>
+                <Link href={investigationHref(inv)} className="line-clamp-2 font-medium hover:underline">{inv.pr_title ?? "Untitled pull request"}</Link>
+              </div>
+              <StateBadge state={stateOf(inv)} />
+            </div>
+            {children(inv)}
+          </Reveal>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

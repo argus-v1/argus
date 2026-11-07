@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LoadError, Pair, StageRail, StateBadge } from "@/components/console";
-import { Icon, ROLE_ICON, ROLE_VAR } from "@/components/Icons";
+import { ArrowUpRight, Eye, GitPullRequest, ShieldAlert } from "lucide-react";
+import { Outcome, Reveal, RoleTag, StageTracker, StateBadge } from "@/components/argus/kit";
+import { CodeBlock } from "@/components/argus/code";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  durationMs, fmtDuration, fmtTime, investigationHref, isRelayNote, ROLE_NAME, short, skepticCaught, skepticFindings, stageDurations, stateOf,
+  durationMs, failingCases, fmtDuration, fmtTime, investigationHref, isRelayNote, scribeReason, short, skepticCaught,
+  stageDurations, stateOf, testFiles, testImports, testSource,
 } from "@/lib/derive";
 import { getAttempts, getEvents } from "@/lib/supabase";
-import { AGENTS, STAGES, STAGE_ROLE, type Event, type Investigation } from "@/lib/types";
-import "@/app/console.css";
+import { type Event, type Investigation } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -20,235 +25,197 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   return { title: `${p.owner}/${p.repo} #${p.pr} · attempt ${p.attempt}` };
 }
 
-const v = (c: string) => ({ "--c": c }) as React.CSSProperties;
-
 export default async function InvestigationPage({ params }: { params: Promise<Params> }) {
   const p = await params;
   const repo = `${p.owner}/${p.repo}`;
   const pr = Number(p.pr), attempt = Number(p.attempt);
   if (!Number.isInteger(pr) || !Number.isInteger(attempt)) notFound();
 
-  let attempts: Investigation[], events: Event[];
+  let attempts: Investigation[] = [], events: Event[] = [];
+  let loadError: string | null = null;
   try {
     attempts = await getAttempts(repo, pr);
-    const inv0 = attempts.find((a) => a.attempt === attempt);
-    events = inv0 ? await getEvents([inv0.id]) : [];
+    const found = attempts.find((a) => a.attempt === attempt);
+    events = found ? await getEvents([found.id]) : [];
   } catch (e) {
-    return <main className="con"><div className="wrap"><div className="sect"><LoadError what="this investigation" message={(e as Error).message} /></div></div></main>;
+    loadError = (e as Error).message;
+  }
+  if (loadError) {
+    return <main className="mx-auto max-w-[1100px] px-5 pt-32 md:px-8"><Card><CardContent className="py-6 text-sm text-muted-foreground">Couldn&apos;t reach the event log ({loadError}). Refresh in a moment.</CardContent></Card></main>;
   }
   const inv = attempts.find((a) => a.attempt === attempt);
   if (!inv) notFound();
 
   const now = Date.now();
   const state = stateOf(inv);
-  const durs = stageDurations(events);
   const runs = events.filter((e) => e.kind === "test_run");
+  const failing = failingCases(events);
+  const files = testFiles(events);
+  const reason = scribeReason(events);
   const caught = skepticCaught(events);
-  const findings = skepticFindings(events);
-  const failedProbes = runs.filter((e) => e.role === "skeptic" && e.data.outcome === "failed" && e.data.ref !== "main");
-  const at = STAGES.indexOf(inv.stage);
   const base = investigationHref(inv);
-  const scribeMsg = events.find((e) => e.role === "scribe" && e.kind === "message");
   const newer = attempts.filter((a) => a.attempt > attempt).at(-1);
-  const github = events.filter((e) => e.kind === "label" || e.kind === "comment");
-  const reason = scribeMsg?.message.match(/^verdict:\s*[^·]+·\s*(.+)$/i)?.[1];
+  const needsFix = state === "changes-needed" || state === "not-reproduced";
+
+  // The regression test to add: each failing test function, plus the imports it needs.
+  const brief = failing
+    .map((c) => {
+      const f = files.find((x) => x.file === c.file) ?? files.find((x) => testSource(x.content, c.test));
+      return f ? { file: f.file, src: testSource(f.content, c.test), imports: testImports(f.content) } : null;
+    })
+    .filter((x): x is { file: string; src: string; imports: string } => !!x?.src);
+  const briefFile = brief[0]?.file?.replace(/^test_argus_\d+/, "test_regression") ?? "test_regression.py";
+  const briefCode = brief.length ? [brief[0].imports, ...[...new Set(brief.map((b) => b.src))]].join("\n\n\n") + "\n" : "";
 
   return (
-    <main className="con">
-      <section className="phero ink">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/velazquez.webp" alt="" style={{ objectPosition: "80% 40%" }} />
-        <div className="wrap">
-        <header className="ihead">
-          <div className="crumbs">
-            <Link href="/investigations">Investigations</Link><span>/</span>
-            <Link href={`/console?repo=${encodeURIComponent(repo)}`}>{repo}</Link><span>/</span>
-            <span>PR #{pr}</span><span>/</span><span>attempt {attempt}</span>
-          </div>
-          <h1>{inv.pr_title ?? `Pull request #${pr}`}</h1>
-          <div className="imeta">
-            <span>by <b>{inv.contributor ?? "unknown"}</b></span>
-            <span>head <b>{short(inv.head_sha)}</b> on base <b>{short(inv.base_sha)}</b></span>
-            <span>{inv.trigger === "push" ? "re-verified after a push" : "started by the argus label"}</span>
-            <span>started <b>{fmtTime(inv.started_at)}</b></span>
-            <span>took <b>{fmtDuration(durationMs(inv, now))}</b></span>
-          </div>
-          <div className="iacts">
-            <StateBadge state={state} large />
-            {reason && <span style={{ color: "var(--muted)", fontSize: 15 }}>{reason}</span>}
-          </div>
-          <div className="iacts">
-            {inv.pr_url && <a className="btn btn-line btn-sm" href={inv.pr_url}>Pull request on GitHub <Icon id="i-out" size={13} /></a>}
-            {inv.comment_url && <a className="btn btn-line btn-sm" href={inv.comment_url}>The Argus comment <Icon id="i-out" size={13} /></a>}
-            <Link className="btn btn-light btn-sm" href={`${base}/bundle`}>Verify it yourself <Icon id="i-arrow" size={14} /></Link>
-            <LiveRefresh investigationIds={[inv.id]} running={inv.status === "running"} />
-          </div>
+    <main className="mx-auto max-w-[1100px] px-5 pb-24 md:px-8">
+      <Reveal as="section" className="space-y-5 border-b border-border pb-8 pt-28 md:pt-32">
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
+          <GitPullRequest className="size-3.5" aria-hidden />
+          <span>{inv.repo} #{inv.pr_number}</span>
+          <span>·</span>
+          <span>by {inv.contributor ?? "unknown"}</span>
+          <span>·</span>
+          <span>head {short(inv.head_sha)}</span>
+          {inv.status === "running" && <LiveRefresh running investigationIds={[inv.id]} />}
+        </div>
+        <h1 className="max-w-4xl font-serif text-3xl font-light leading-tight text-balance md:text-5xl">{inv.pr_title ?? "Untitled pull request"}</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <StateBadge state={state} size="lg" />
+          {reason && <span className="text-sm text-pretty text-muted-foreground">{reason}</span>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {inv.pr_url && <Button asChild size="sm" variant="outline"><a href={inv.pr_url}>Pull request<ArrowUpRight /></a></Button>}
+          {inv.comment_url && <Button asChild size="sm" variant="outline"><a href={inv.comment_url}>Argus comment<ArrowUpRight /></a></Button>}
+          <Button asChild size="sm" variant="secondary"><Link href={`${base}/bundle`}>Verify it yourself</Link></Button>
           {attempts.length > 1 && (
-            <nav className="attempts" aria-label="Attempts">
+            <nav className="ml-auto flex items-center gap-1 rounded-lg border border-border p-1" aria-label="Attempts">
               {attempts.map((a) => (
-                <Link key={a.id} href={investigationHref(a)} aria-current={a.attempt === attempt ? "page" : undefined}>
-                  Attempt {a.attempt} <StateBadge state={stateOf(a)} />
+                <Link key={a.id} href={investigationHref(a)} aria-current={a.attempt === attempt ? "page" : undefined}
+                  className={cn("rounded-md px-2.5 py-1 font-mono text-xs text-muted-foreground hover:text-foreground", a.attempt === attempt && "bg-secondary text-foreground")}>
+                  attempt {a.attempt}
                 </Link>
               ))}
             </nav>
           )}
-          {newer && (
-            <div className="newer" role="status">
-              <span><b>Attempt {newer.attempt}</b> {newer.status === "running" ? "is running now" : "has finished"} on the author&apos;s new push.</span>
-              <Link className="btn btn-light btn-sm" href={investigationHref(newer)}>{newer.status === "running" ? "Watch it live" : "See attempt " + newer.attempt} <Icon id="i-arrow" size={14} /></Link>
-            </div>
-          )}
-        </header>
         </div>
-        <p className="credit">Diego Velázquez, Mercury and Argus, c. 1659 (detail)</p>
-      </section>
-      <div className="wrap">
+        {newer && <p className="text-sm text-muted-foreground">A newer attempt exists: <Link className="underline underline-offset-4 hover:text-foreground" href={investigationHref(newer)}>attempt {newer.attempt}, {stateOf(newer).replace("-", " ")}</Link>.</p>}
+      </Reveal>
 
-        <StageRail inv={inv} events={events} style={{ marginTop: 32 }} />
-
-        <div className="igrid">
-          <section aria-label="Timeline">
-            {caught && (
-              <div className="callout">
-                <div className="r"><Icon id="i-skp" size={15} />THE SKEPTIC BROKE THE PROOF</div>
-                <p>The Reproducer showed the PR fixes the reported case. The Skeptic, on a different model ({inv.skeptic_model ?? "?"} vs {inv.reproducer_model ?? "?"}), found {humanFindings(findings)}.</p>
-                {failedProbes.map((e) => (
-                  <div className="q" key={e.id}>{e.message}{e.data.summary ? ` · ${e.data.summary}` : ""}</div>
-                ))}
-              </div>
-            )}
-            {events.length === 0 ? (
-              <div className="empty"><h3>Waiting for the first step</h3><p>The Triager is about to start. This page fills in live.</p></div>
-            ) : (
-              <ol className="tl">
-                {events.map((e) => <TimelineItem key={e.id} e={e} />)}
-              </ol>
-            )}
-          </section>
-
-          <aside>
-            <div className="panel">
-              <header><span>Test runs in the sandbox</span><span>{runs.length}</span></header>
-              {runs.length === 0 ? (
-                <p style={{ padding: "14px 18px", margin: 0, color: "var(--faint)", fontSize: 14 }}>No test runs yet.</p>
-              ) : (
-                <ul className="runs">
-                  {runs.map((e) => (
-                    <li key={e.id}>
-                      <span className="lbl" style={{ color: ROLE_VAR[e.role] }}>{e.data.label ?? e.artifact_path}</span>
-                      <Outcome o={e.data.outcome} />
-                      <span className="sub">{e.data.test} @ {e.data.ref} {short(e.data.sha)} · {fmtDuration(e.duration_ms)}</span>
-                      {e.data.summary && <span className="sum">{e.data.summary}</span>}
-                      {e.data.log_tail && (
-                        <details className="logtail">
-                          <summary>Last lines of the log</summary>
-                          <pre>{e.data.log_tail}</pre>
-                        </details>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="panel">
-              <header><span>On GitHub</span>{inv.pr_url && <a className="u" href={inv.pr_url}>#{pr}</a>}</header>
-              {github.length === 0 ? (
-                <p style={{ padding: "14px 18px", margin: 0, color: "var(--faint)", fontSize: 14 }}>Nothing posted yet.</p>
-              ) : (
-                <ul className="ghlog">
-                  {github.map((e) => {
-                    const lbl = e.message.replace(/^label:\s*/, "");
-                    const tone = lbl === "verified" ? "var(--ok)" : lbl === "changes-needed" ? "var(--bad)" : "var(--amb)";
-                    return (
-                      <li key={e.id}>
-                        <Icon id={e.kind === "comment" ? "i-scr" : "i-dot"} size={15} style={{ color: e.kind === "comment" ? "var(--scr)" : tone }} />
-                        {e.kind === "comment" ? (
-                          <a className="u" href={e.message}>Argus posted the evidence comment</a>
-                        ) : (
-                          <span>Label set to <span className="lb" style={{ color: tone }}>{lbl}</span></span>
-                        )}
-                        <time>{new Date(e.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" })}</time>
+      {needsFix && (
+        <Reveal as="section" className="mt-8">
+          <Card id="fix" className="scroll-mt-28 gap-5 border-bad/40">
+            <CardHeader>
+              <CardTitle className="font-serif text-2xl font-light">Fix-it brief</CardTitle>
+              <CardDescription className="text-pretty">
+                {state === "not-reproduced"
+                  ? "Argus couldn't make the reported bug happen on main. Add a failing test that shows it, or point to the exact input."
+                  : "Argus confirmed the bug and that this PR fixes the reported input, but these inputs of the same kind still fail. Fix them, add the test below, and push: Argus re-checks automatically."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {failing.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">Still failing on this PR</h3>
+                  <ul className="divide-y divide-border rounded-lg border border-border">
+                    {failing.map((c) => (
+                      <li key={c.test} className="flex flex-col gap-1 px-4 py-2.5 sm:flex-row sm:items-baseline sm:justify-between">
+                        <span className="font-mono text-sm">{c.input}</span>
+                        <span className="font-mono text-xs text-bad">{c.message}</span>
                       </li>
-                    );
-                  })}
-                </ul>
+                    ))}
+                  </ul>
+                </div>
               )}
-            </div>
-            <div className="panel">
-              <header><span>Who checked what</span><Pair inv={inv} /></header>
-              <ul className="who-list">
-                {AGENTS.map((r) => {
-                  const m = events.find((e) => e.role === r && e.kind === "message");
-                  return (
-                    <li key={r} style={v(ROLE_VAR[r])}>
-                      <Icon id={ROLE_ICON[r]} size={18} style={{ color: "var(--c)" }} />
-                      <span>{ROLE_NAME[r]} <span style={{ color: "var(--faint)" }}>· {m?.model ?? "–"}</span></span>
-                      <span>{fmtDuration(m?.duration_ms)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </aside>
-        </div>
-      </div>
+              {briefCode && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Add this regression test</h3>
+                  <p className="text-sm text-muted-foreground">Written by the agents for this PR. Save it as <span className="font-mono text-foreground">tests/{briefFile}</span>; it fails now and should pass once the fix is complete.</p>
+                  <CodeBlock code={briefCode} title={`tests/${briefFile}`} />
+                </div>
+              )}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Check it before you push</h3>
+                <CodeBlock code={`pytest tests/${briefFile} -q`} title="terminal" />
+              </div>
+            </CardContent>
+          </Card>
+        </Reveal>
+      )}
+
+      {caught && (
+        <Reveal as="section" className="mt-6">
+          <Card className="gap-2 border-skp/40 py-5">
+            <CardContent className="flex gap-3 px-5">
+              <ShieldAlert className="mt-0.5 size-5 shrink-0 text-skp" aria-hidden />
+              <p className="text-sm text-pretty">
+                <span className="font-medium">The Skeptic broke the proof.</span>{" "}
+                <span className="text-muted-foreground">The Reproducer ({inv.reproducer_model ?? "?"}) showed the reported case is fixed; the Skeptic, on a different model ({inv.skeptic_model ?? "?"}), found inputs of the same kind that still fail.</span>
+              </p>
+            </CardContent>
+          </Card>
+        </Reveal>
+      )}
+
+      <Reveal as="section" className="mt-10">
+        <h2 className="mb-4 text-sm font-medium text-muted-foreground">
+          Stages · {inv.status === "running" ? `running for ${fmtDuration(durationMs(inv, now))}` : `label to verdict in ${fmtDuration(durationMs(inv, now))}`}
+        </h2>
+        <StageTracker stage={inv.stage} status={inv.status} durations={stageDurations(events)} attempt={inv.attempt} />
+      </Reveal>
+
+      {runs.length > 0 && (
+        <Reveal as="section" className="mt-12">
+          <h2 className="mb-3 text-sm font-medium text-muted-foreground">Test runs · all in a sandbox with no network</h2>
+          <Accordion type="multiple" className="rounded-lg border border-border">
+            {runs.map((e) => (
+              <AccordionItem key={e.id} value={String(e.id)} className="px-4">
+                <AccordionTrigger className="gap-3 py-3 hover:no-underline">
+                  <div className="grid w-full grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 text-left sm:grid-cols-[9rem_1fr_auto]">
+                    <RoleTag role={e.role} />
+                    <span className="truncate font-mono text-xs text-muted-foreground sm:order-none">{e.data.test ?? "suite"} @ {e.data.ref ?? "?"}</span>
+                    <span className="text-xs"><Outcome outcome={e.data.outcome} /></span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-3 pb-4">
+                  {e.data.summary && <p className="font-mono text-xs text-muted-foreground">{e.data.summary}</p>}
+                  {e.data.content && <CodeBlock code={e.data.content} title={e.data.test_file ?? "test file"} />}
+                  {e.data.log_tail && <CodeBlock code={e.data.log_tail} title={`${e.data.label ?? "run"}.log · last lines`} />}
+                  {!e.data.content && !e.data.log_tail && <p className="text-xs text-muted-foreground">This run predates published test files and logs.</p>}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </Reveal>
+      )}
+
+      <Reveal as="section" className="mt-12">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Timeline</h2>
+        <ol className="space-y-2 border-l border-border pl-5">
+          {events.filter((e) => e.kind !== "test_run" && !isRelayNote(e)).map((e) => (
+            <li key={e.id} className="relative">
+              <i className="absolute -left-[23.5px] top-2 size-1.5 rounded-full bg-muted-foreground/50" aria-hidden />
+              <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                <span className="font-mono text-xs text-faint tabular-nums">{fmtTime(e.created_at)}</span>
+                {e.kind === "banner" ? (
+                  <span className="font-mono text-xs text-faint">{e.message}</span>
+                ) : (
+                  <>
+                    <RoleTag role={e.role} />
+                    <span className="min-w-0 break-words text-pretty">
+                      {e.kind === "comment" ? <a className="underline underline-offset-4" href={e.message}>posted the evidence comment</a> : e.message}
+                    </span>
+                  </>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Reveal>
+
+      <p className="mt-12 flex items-center gap-2 text-xs text-muted-foreground">
+        <Eye className="size-3.5" aria-hidden /> Reproducer {inv.reproducer_model ?? "?"} · Skeptic {inv.skeptic_model ?? "?"} · started {fmtTime(inv.started_at)}
+      </p>
     </main>
-  );
-}
-
-const FINDING_WORDS: Record<string, string> = { gap: "a case the fix misses", regression: "a regression", invalid_test: "a test that does not prove the claim" };
-function humanFindings(f: string[]): string {
-  const words = f.filter((x) => FINDING_WORDS[x]).map((x) => FINDING_WORDS[x]);
-  return words.length ? words.join(" and ") : "a gap";
-}
-
-function Outcome({ o }: { o?: string }) {
-  if (!o) return <span className="outc">–</span>;
-  return (
-    <span className={`outc ${o}`}>
-      <Icon id={o === "passed" ? "i-ok" : "i-no"} size={13} />
-      {o.toUpperCase()}
-    </span>
-  );
-}
-
-function TimelineItem({ e }: { e: Event }) {
-  const color = ROLE_VAR[e.role];
-  const time = new Date(e.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" });
-  if (e.kind === "banner") {
-    return (
-      <li className="tev banner" style={v("var(--gold)")}>
-        <span className="dot"><Icon id="i-eye" size={14} /></span>
-        <div className="body"><div className="txt">{e.message}</div></div>
-      </li>
-    );
-  }
-  const kindCls = e.kind === "test_run" ? " run" : e.kind === "error" ? " err" : isRelayNote(e) ? " relay" : "";
-  return (
-    <li className={`tev${kindCls}`} style={v(e.kind === "error" ? "var(--bad)" : color)}>
-      <span className="dot"><Icon id={e.kind === "error" ? "i-no" : ROLE_ICON[e.role]} size={15} /></span>
-      <div className="body">
-        <div className="who">
-          <b>{ROLE_NAME[e.role]}</b>
-          {e.model && <span>{e.model}</span>}
-          <span>{e.stage}</span>
-          <span>{time} UTC</span>
-          {e.duration_ms != null && <span>{fmtDuration(e.duration_ms)}</span>}
-        </div>
-        {e.kind === "test_run" ? (
-          <div className="txt">
-            <span>{e.data.test ?? e.message} @ {e.data.ref}</span>
-            <Outcome o={e.data.outcome} />
-            {e.data.summary && <span style={{ color: "var(--muted)" }}>{e.data.summary}</span>}
-          </div>
-        ) : e.kind === "comment" ? (
-          <div className="txt"><a className="u" href={e.message}>Evidence comment posted on GitHub</a></div>
-        ) : e.kind === "label" ? (
-          <div className="txt"><span className="mono" style={{ fontSize: 13 }}>{e.message}</span></div>
-        ) : (
-          <div className="txt">{e.message}</div>
-        )}
-      </div>
-    </li>
   );
 }

@@ -104,3 +104,62 @@ export function skepticFindings(events: Event[]): string[] {
 /** The orchestrator's note that it relayed an agent's report into the room (Switch refused the agent's post). */
 export const isRelayNote = (e: Pick<Event, "role" | "kind" | "message">) =>
   e.role === "orchestrator" && e.kind === "message" && /^relayed /i.test(e.message);
+
+/* ---- Fix-it brief: what failed, and the test to add ---------------------------------------- */
+
+export type FailingCase = { test: string; input: string; message: string; file?: string; role: string; label?: string };
+
+/** Every test that failed on the PR's head (not on main): the Skeptic's probes and any Reproducer test
+ *  that still fails. Reads the per-test results the orchestrator logs (data.cases); older runs without
+ *  them fall back to the run's one-line summary. */
+export function failingCases(events: Event[]): FailingCase[] {
+  const out: FailingCase[] = [];
+  for (const e of events) {
+    if (e.kind !== "test_run" || e.data.ref === "main" || e.data.outcome === "passed") continue;
+    const cases = (e.data as { cases?: { id?: string; outcome?: string; message?: string }[] }).cases;
+    if (cases?.length) {
+      for (const c of cases) {
+        if (c.outcome !== "failed" && c.outcome !== "error") continue;
+        const test = (c.id ?? "").split("::").pop() ?? "";
+        out.push({ test, input: humanize(test), message: (c.message ?? "").split("\n")[0], file: e.data.test_file, role: e.role, label: e.data.label });
+      }
+    } else if (e.data.summary) {
+      out.push({ test: e.data.test ?? "", input: e.data.test ?? "test run", message: e.data.summary, file: e.data.test_file, role: e.role, label: e.data.label });
+    }
+  }
+  // one row per test name, keeping the first (the run on the newest head comes last in a re-check)
+  return [...new Map(out.map((c) => [c.test || c.input, c])).values()];
+}
+
+/** test_tab_only -> "tab only" */
+export const humanize = (test: string) => test.replace(/^test_/, "").replace(/_/g, " ").trim() || test;
+
+/** The source of one test function (with its decorators) from a test file. */
+export function testSource(content: string, name: string): string | null {
+  const lines = content.split("\n");
+  const start = lines.findIndex((l) => new RegExp(`^def ${name}\\s*\\(`).test(l));
+  if (start < 0) return null;
+  let from = start;
+  while (from > 0 && lines[from - 1].startsWith("@")) from--;
+  let end = start + 1;
+  while (end < lines.length && (lines[end].trim() === "" || /^\s/.test(lines[end]))) end++;
+  return lines.slice(from, end).join("\n").trimEnd();
+}
+
+/** The import lines at the top of a test file (so a pasted function runs on its own). */
+export const testImports = (content: string) =>
+  content.split("\n").filter((l) => /^(import |from \S+ import )/.test(l)).join("\n");
+
+/** The agent-written test files a run used, newest first, by file name. */
+export function testFiles(events: Event[]): { file: string; content: string; role: string }[] {
+  const files = new Map<string, { file: string; content: string; role: string }>();
+  for (const e of events) {
+    if (e.kind === "test_run" && e.data.test_file && e.data.content) files.set(e.data.test_file, { file: e.data.test_file, content: e.data.content, role: e.role });
+  }
+  return [...files.values()];
+}
+
+export function scribeReason(events: Event[]): string | null {
+  const m = events.find((e) => e.role === "scribe" && e.kind === "message")?.message.match(/^verdict:\s*[^·]+·\s*(.+)$/i);
+  return m?.[1]?.trim() || null;
+}

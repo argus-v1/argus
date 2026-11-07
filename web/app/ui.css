@@ -1,0 +1,56 @@
+/* Tailwind + shadcn/ui, themed with Argus's own tokens (app/globals.css), so every shadcn component
+   follows the light/dark switch (data-theme on <html>) and the Argus palette. tweakcn-style: shadcn's
+   semantic variables are mapped once here; components never use raw colours. */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface-2);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--gold);
+  --color-primary-foreground: var(--gold-ink);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-3);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--bad);
+  --color-border: var(--line);
+  --color-input: var(--line-strong);
+  --color-ring: var(--gold);
+
+  /* Argus extras: status (always with a glyph and a word) and role colours (identify roles only) */
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-amb: var(--amb);
+  --color-gold: var(--gold);
+  --color-faint: var(--faint);
+  --color-tri: var(--tri);
+  --color-rep: var(--rep);
+  --color-skp: var(--skp);
+  --color-scr: var(--scr);
+
+  --font-sans: var(--sans);
+  --font-serif: var(--serif);
+  --font-mono: var(--mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root { --radius: 0.75rem; }
+:root, :root[data-theme="dark"], .ink { --gold-ink: #17120a; }
+:root[data-theme="light"] { --gold-ink: #fbfaf6; }
+
+@layer base {
+  * { @apply border-border; }
+}

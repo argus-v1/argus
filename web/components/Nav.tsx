@@ -8,7 +8,7 @@ import { INSTALL_URL } from "@/lib/site";
 import { ThemeToggle } from "./ThemeToggle";
 
 const LINKS: [string, string][] = [
-  ["/console", "Console"],
+  ["/console", "Queue"],
   ["/investigations", "Investigations"],
   ["/evals", "Evals"],
 ];
